@@ -114,8 +114,19 @@ bool q_insert_head(Queue *q, char *s)
   strcpy(new_value, s);
   new_head->value = new_value;
 
-  new_head->next = q->head;
-  q->head = new_head;
+  // check to see if this is the first elemnet in the list, if it is, then this is both the head AND the tail
+  if (q->size == 0)
+  {
+    new_head->next = q->head;
+    q->head = new_head;
+    q->tail = new_head;
+  }
+  else
+  {
+    new_head->next = q->head;
+    q->head = new_head;
+  }
+
   q->size = q->size + 1;
   // if the list was empty, the tail might also need updating
   return true;
@@ -130,9 +141,40 @@ bool q_insert_head(Queue *q, char *s)
  */
 bool q_insert_tail(Queue *q, char *s)
 {
+  if (q == NULL)
+  {
+    printf("q_insert_tail(): unable to add to an uninitialized queue\n");
+    return false;
+  }
+
+  Node *new_tail = (Node *)malloc(sizeof(Node));
   // TODO implement in similar fashion to q_insert_head
   // if the list was empty, the head might also need updating
-  return false;
+  if (new_tail == NULL)
+  {
+    printf("q_insert_tail(): unable to allocate space for new tail node insertion\n");
+    exit(1);
+  }
+
+  char *new_value = (char *)malloc(strlen(s) + 1);
+  strcpy(new_value, s);
+  new_tail->value = new_value;
+  new_tail->next = NULL;
+
+  if (q->size == 0)
+  {
+    q->tail = new_tail;
+    q->head = new_tail;
+  }
+  else
+  {
+    q->tail->next = new_tail;
+    q->tail = q->tail->next;
+  }
+
+  q->size = q->size + 1;
+
+  return true;
 }
 
 /*
@@ -146,7 +188,7 @@ bool q_insert_tail(Queue *q, char *s)
 bool q_remove_head(Queue *q, char *sp, long bufsize)
 {
   // TODO check if q is NULL or empty
-  if (q == NULL || q->head == NULL)
+  if (q == NULL || q->size == 0)
   {
     printf("q_remove_head(): unable to remove from an empty or uninitialized queue\n");
     return false;
