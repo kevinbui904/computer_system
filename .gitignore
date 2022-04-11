@@ -50,3 +50,6 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+#ignore files in traces folder, these are used for testing purposes
+!traces/**
