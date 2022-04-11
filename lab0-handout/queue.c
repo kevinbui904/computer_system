@@ -12,7 +12,7 @@
  * It uses a singly-linked list to represent the set of queue elements
  *
  * @version 0.1
- * @date 2022-04-04
+ * @date 2022-04-10
  *
  * @copyright Copyright (c) 2022 <buik@carleton.edu>
  *
@@ -35,7 +35,8 @@ Queue *q_new()
   // TODO check if malloc returned NULL (this means space could not be allocated)
   if (q == NULL)
   {
-    return q;
+    printf("q_new(): unable to allocate memories for a new queue.\n");
+    return NULL;
   }
   q->head = NULL;
   q->tail = NULL;
@@ -50,27 +51,29 @@ void q_free(Queue *q)
   if (q == NULL)
   {
     printf("q_free() error: unable to free an unintialized queue\n");
-    exit(1);
   }
-
-  // TODO free the queue nodes
-  /* You'll want to loop through the list nodes until the next pointer is NULL,
-   * starting at the head, freeing each node and its string.
-   * Account for an empty list (head is NULL). */
-
-  if (q->head != NULL)
+  else
   {
-    Node *current = q->head;
-    while (current != NULL)
+
+    // TODO free the queue nodes
+    /* You'll want to loop through the list nodes until the next pointer is NULL,
+     * starting at the head, freeing each node and its string.
+     * Account for an empty list (head is NULL). */
+
+    if (q->head != NULL)
     {
-      Node *previous = current;
-      current = current->next;
-      free(previous->value);
-      free(previous);
+      Node *current = q->head;
+      while (current != NULL)
+      {
+        Node *previous = current;
+        current = current->next;
+        free(previous->value);
+        free(previous);
+      }
     }
+    // Freeing queue structure itself
+    free(q);
   }
-  // Freeing queue structure itself
-  free(q);
 }
 
 /*
@@ -153,10 +156,16 @@ bool q_insert_tail(Queue *q, char *s)
   if (new_tail == NULL)
   {
     printf("q_insert_tail(): unable to allocate space for new tail node insertion\n");
-    exit(1);
+    return false;
   }
 
   char *new_value = (char *)malloc(strlen(s) + 1);
+  if (new_value == NULL)
+  {
+    printf("q_insert_tail(): unable to allocate space for new string value.\n");
+    free(new_tail);
+    return false;
+  }
   strcpy(new_value, s);
   new_tail->value = new_value;
   new_tail->next = NULL;
@@ -209,7 +218,7 @@ bool q_remove_head(Queue *q, char *sp, long bufsize)
 
   char *src_str = current_head->value;
   strncpy(sp, src_str, bufsize - 1);
-  sp[bufsize - 2] = '\0';
+  sp[bufsize - 1] = '\0';
 
   // update q->head to remove the current head from the queue
   q->head = q->head->next;
@@ -242,5 +251,25 @@ int q_size(Queue *q)
  */
 void q_reverse(Queue *q)
 {
-  /* You need to write the code for this function */
+  if (q == NULL || q->size == 0)
+  {
+    printf("q_reverse(): unable to reverse empty queue\n");
+  }
+  else
+  {
+    Node *new_head = NULL;
+
+    Node *current = q->head;
+
+    while (current != NULL)
+    {
+      Node *current_next = current->next;
+      current->next = new_head;
+      new_head = current;
+      current = current_next;
+    }
+
+    q->tail = q->head;
+    q->head = new_head;
+  }
 }
