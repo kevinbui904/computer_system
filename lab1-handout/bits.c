@@ -1,8 +1,8 @@
-/* 
+/*
  * CS 208 Lab 1: Data Lab
- * 
+ *
  * Thien K. M. Bui <buik@carleton.edu>
- * 
+ *
  * bits.c - Source file with your solutions to the Lab.
  *          This is the file you will hand in to your instructor.
  *
@@ -10,8 +10,8 @@
  * compiler. You can still use printf for debugging without including
  * <stdio.h>, although you might get a compiler warning. In general,
  * it's not good practice to ignore compiler warnings, but in this
- * case it's OK.  
- * 
+ * case it's OK.
+ *
  * Last updated 04-12-2022
  */
 
@@ -134,7 +134,6 @@ NOTES:
  *      the correct answers.
  */
 
-
 #endif
 /* Copyright (C) 1991-2018 Free Software Foundation, Inc.
    This file is part of the GNU C Library.
@@ -179,23 +178,24 @@ NOTES:
  *  Legal ops: ! ~ & ^ | + << >>
  *  Max ops: 10
  *  Rating: 6
-*/
-int sign(int x) {
+ */
+int sign(int x)
+{
 
-    /*
-    1000 --> 0001
-    0100 --> 0001
-    0000 --> 0000
-    */
-    int not_not = !!x;
+  /*
+  1000 --> 0001
+  0100 --> 0001
+  0000 --> 0000
+  */
+  int not_not = !!x;
 
-    /*
-    1000 --> 1111
-    0100 --> 0000
-    0000 --> 0000
-    */
-    int shifted_right = x >> 31;
-    return shifted_right | (not_not);
+  /*
+  1000 --> 1111
+  0100 --> 0000
+  0000 --> 0000
+  */
+  int shifted_right = x >> 31;
+  return shifted_right | (not_not);
 }
 /*
  * getByte - Extract byte n from int x
@@ -205,7 +205,8 @@ int sign(int x) {
  *   Max ops: 6
  *   Rating: 5
  */
-int getByte(int x, int n) {
+int getByte(int x, int n)
+{
   /*
   0001 = 1
   0010 = 2
@@ -240,17 +241,15 @@ int getByte(int x, int n) {
  *           For x_or_y, try devising an expression for not-or (1s where x
  *           and y both have 0s) and then inverting that
  */
-int bitXor(int x, int y) {
+int bitXor(int x, int y)
+{
   /*
-  Break it down into AND and OR (structures)
+  Change it to AND from OR with deMorgan law
   xor :=  (X OR Y) AND NOT(X AND Y)
-          (X OR Y) AND (NOT X OR NOT Y)
-          ...foil
-          (X AND NOT Y) OR (Y AND NOT X)     ... reverse de Morgan 
-          NOT(NOT (X AND NOT Y) AND NOT(Y AND NOT X)) 
+          <=> NOT(NOT X AND NOT Y) AND NOT(X AND Y)
 
   */
-  return ~(~(x & ~y) & ~(y & ~x));
+  return ~(~x & ~y) & ~(y & x);
 }
 /*
  * bitAnd - x&y using only ~ and |
@@ -258,10 +257,11 @@ int bitXor(int x, int y) {
  *   Legal ops: ~ |
  *   Max ops: 8
  *   Rating: 5
- *   Advice: try divising an expression for not-and first 
+ *   Advice: try divising an expression for not-and first
  *           (1s where x or y or both have 0s) and then invert that
  */
-int bitAnd(int x, int y) {
+int bitAnd(int x, int y)
+{
   /*
   Use de Morgan law
   X AND Y = NOT(NOT X OR NOT Y)
@@ -279,7 +279,8 @@ int bitAnd(int x, int y) {
  *           all 1s depending on whether x is true or not. Apply these masks to
  *           y and z and return the combined result.
  */
-int conditional(int x, int y, int z) {
+int conditional(int x, int y, int z)
+{
   return 2;
 }
 /*
@@ -291,7 +292,8 @@ int conditional(int x, int y, int z) {
  *   Rating: 5
  *   Advice: use x and -x to detect when x is 0
  */
-int logicalNeg(int x) {
+int logicalNeg(int x)
+{
   return 2;
 }
 /*
@@ -304,10 +306,11 @@ int logicalNeg(int x) {
  *           Handle additional cases: negative overflow, positive overflow, zero,
  *           and combine the results
  */
-int isLessOrEqual(int x, int y) {
+int isLessOrEqual(int x, int y)
+{
   return 2;
 }
-/* 
+/*
  * absVal - absolute value of x
  *   Example: absVal(-1) = 1.
  *   Legal ops: ! ~ & ^ | + << >>
@@ -317,7 +320,8 @@ int isLessOrEqual(int x, int y) {
  *           ~x + 1 when x is negative, and x otherwise.
  *           (^ may prove useful.)
  */
-int absVal(int x) {
+int absVal(int x)
+{
   return 2;
 }
 /*
@@ -331,6 +335,7 @@ int absVal(int x) {
  *           significant place. When x is a power of 2, x - 1 and x will not
  *           have 1s in any of the same places.
  */
-int isPower2(int x) {
+int isPower2(int x)
+{
   return 2;
 }
