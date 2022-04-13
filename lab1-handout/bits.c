@@ -280,7 +280,7 @@ int bitAnd(int x, int y) {
  *           y and z and return the combined result.
  */
 int conditional(int x, int y, int z) {
-  return 2;
+  return 3;
 }
 /*
  * logicalNeg - implement the ! operator, using all of
