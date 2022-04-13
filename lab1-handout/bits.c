@@ -292,7 +292,7 @@ int conditional(int x, int y, int z) {
  *   Advice: use x and -x to detect when x is 0
  */
 int logicalNeg(int x) {
-  return 2;
+  return 3;
 }
 /*
  * isLessOrEqual - if x <= y  then return 1, else return 0
