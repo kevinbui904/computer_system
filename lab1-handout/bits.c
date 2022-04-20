@@ -12,7 +12,7 @@
  * it's not good practice to ignore compiler warnings, but in this
  * case it's OK.
  *
- * Last updated 04-12-2022
+ * Last updated 04-20-2022
  */
 
 #if 0
@@ -321,7 +321,41 @@ int logicalNeg(int x)
  */
 int isLessOrEqual(int x, int y)
 {
-  return 2;
+  
+  /*
+    x | y | x-y | output
+    --------------------
+    + | + | +   | 0
+    + | + | -   | 1
+    - | - | +   | 0
+    - | - | -   | 1
+    + | - | -   | 0  (overflow)
+    - | + | +   | 1 (overflow)
+    - | + | -   | 1
+  */
+  int x_minus_y = x + (~y + 1);
+  int x_equal_y = !x_minus_y;
+
+  int xy_sign = x_minus_y >> 31;
+
+  /*
+  (a|b) & c       
+  */
+  
+  int sign_x = x >> 31;
+  int sign_y = y >> 31;
+  
+  //different_sign is a mask, if x and y ARE different signs, then this mask is filled with 0's, else it's filled with 1's.
+  int different_sign = sign_x ^ sign_y; 
+  
+  //if different sign, then just take the sign of x and return its logical negation twice
+  int different_sign_return = !!sign_x;
+
+  int same_sign_return = !!(xy_sign | x_equal_y);
+  
+
+  return ((different_sign & different_sign_return) | (~different_sign & same_sign_return));
+
 }
 /*
  * absVal - absolute value of x
@@ -356,13 +390,13 @@ int absVal(int x)
  */
 int isPower2(int x)
 {
-  int x_minus_one = x + (~1 + 1);
+  int x_minus_one = x + ~0;
 
   //if x is a power of 2, then is_p_two is 0000
-  int is_p_two = ~(x ^ x_minus_one);
+  int is_p_two = !(x & x_minus_one);
   
   int is_negative = x >> 31;
 
 
-  return ;
+  return ((is_negative & 0x0) | (~is_negative & is_p_two)) & !!x;
 }
