@@ -281,7 +281,10 @@ int bitAnd(int x, int y)
  */
 int conditional(int x, int y, int z)
 {
-  return 2;
+  int condition_is_false = ((!x) << 31) >> 31;
+  int cond_true = ~condition_is_false;
+
+  return (cond_true & y) | (condition_is_false & z);
 }
 /*
  * logicalNeg - implement the ! operator, using all of
@@ -294,7 +297,17 @@ int conditional(int x, int y, int z)
  */
 int logicalNeg(int x)
 {
-  return 2;
+  /*abuse overflow
+  if x is positive, then shifting right preserves the 0
+  if x is negative, then shifting right preserves the 1, regardless
+  Regardless, we always get a mask of all 1s if we shift both positive AND negative x by 31
+  if x is 0, then regardless of what we shift, 0 and -0 and shifted 0s is still 0
+  */
+
+  int negative_x = ~x + 1;
+  int overflow = negative_x >> 31 | x >> 31;
+  
+  return overflow + 1;
 }
 /*
  * isLessOrEqual - if x <= y  then return 1, else return 0
@@ -322,7 +335,13 @@ int isLessOrEqual(int x, int y)
  */
 int absVal(int x)
 {
-  return 2;
+  /*
+  use a mask
+  */
+  int is_negative = x >> 31;
+  int negative_x = ~x + 1;
+
+  return (is_negative & negative_x) | (~is_negative & x);
 }
 /*
  * isPower2 - returns 1 if x is a power of 2, and 0 otherwise
@@ -337,5 +356,13 @@ int absVal(int x)
  */
 int isPower2(int x)
 {
-  return 2;
+  int x_minus_one = x + (~1 + 1);
+
+  //if x is a power of 2, then is_p_two is 0000
+  int is_p_two = ~(x ^ x_minus_one);
+  
+  int is_negative = x >> 31;
+
+
+  return ;
 }
