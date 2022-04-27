@@ -1,1 +1,5 @@
 The only man who never makes mistakes is the man who never does anything.
+1 2 4 8 16 32
+1 953 
+5 15
+5 115
