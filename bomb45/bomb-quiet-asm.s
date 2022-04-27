@@ -321,9 +321,9 @@ Disassembly of section .text:
   40140d:	89 d0                	mov    %edx,%eax
   40140f:	29 f0                	sub    %esi,%eax
   401411:	89 c3                	mov    %eax,%ebx
-  401413:	c1 eb 1f             	shr    $0x1f,%ebx
-  401416:	01 c3                	add    %eax,%ebx
-  401418:	d1 fb                	sar    %ebx
+  401413:	c1 eb 1f             	shr    $0x1f,%ebx //ebx is 000000
+  401416:	01 c3                	add    %eax,%ebx //ebx = 14
+  401418:	d1 fb                	sar    %ebx 
   40141a:	01 f3                	add    %esi,%ebx
   40141c:	39 fb                	cmp    %edi,%ebx
   40141e:	7f 08                	jg     401428 <func4+0x1c>
@@ -407,34 +407,34 @@ Disassembly of section .text:
   401510:	48 83 ec 58          	sub    $0x58,%rsp
   401514:	48 8d 74 24 30       	lea    0x30(%rsp),%rsi
   401519:	e8 34 03 00 00       	callq  401852 <read_six_numbers>
-  40151e:	4c 8d 64 24 30       	lea    0x30(%rsp),%r12
-  401523:	41 bd 00 00 00 00    	mov    $0x0,%r13d
+  40151e:	4c 8d 64 24 30       	lea    0x30(%rsp),%r12 //start of first loop
+  401523:	41 bd 00 00 00 00    	mov    $0x0,%r13d //for loop
   401529:	eb 26                	jmp    401551 <phase_6+0x47>
   40152b:	e8 00 03 00 00       	callq  401830 <explode_bomb>
   401530:	eb 2e                	jmp    401560 <phase_6+0x56>
   401532:	83 c3 01             	add    $0x1,%ebx
   401535:	83 fb 05             	cmp    $0x5,%ebx
   401538:	7f 13                	jg     40154d <phase_6+0x43>
-  40153a:	48 63 c3             	movslq %ebx,%rax
-  40153d:	8b 44 84 30          	mov    0x30(%rsp,%rax,4),%eax
+  40153a:	48 63 c3             	movslq %ebx,%rax //rax have 1
+  40153d:	8b 44 84 30          	mov    0x30(%rsp,%rax,4),%eax 
   401541:	39 45 00             	cmp    %eax,0x0(%rbp)
   401544:	75 ec                	jne    401532 <phase_6+0x28>
   401546:	e8 e5 02 00 00       	callq  401830 <explode_bomb>
   40154b:	eb e5                	jmp    401532 <phase_6+0x28>
   40154d:	49 83 c4 04          	add    $0x4,%r12
-  401551:	4c 89 e5             	mov    %r12,%rbp
+  401551:	4c 89 e5             	mov    %r12,%rbp //storing pointer to first arg
   401554:	41 8b 04 24          	mov    (%r12),%eax
   401558:	83 e8 01             	sub    $0x1,%eax
   40155b:	83 f8 05             	cmp    $0x5,%eax
   40155e:	77 cb                	ja     40152b <phase_6+0x21>
-  401560:	41 83 c5 01          	add    $0x1,%r13d
-  401564:	41 83 fd 06          	cmp    $0x6,%r13d
+  401560:	41 83 c5 01          	add    $0x1,%r13d //increment r13d for loop
+  401564:	41 83 fd 06          	cmp    $0x6,%r13d // run the loop 6 times
   401568:	74 33                	je     40159d <phase_6+0x93>
   40156a:	44 89 eb             	mov    %r13d,%ebx
   40156d:	eb cb                	jmp    40153a <phase_6+0x30>
   40156f:	48 8b 52 08          	mov    0x8(%rdx),%rdx
   401573:	83 c0 01             	add    $0x1,%eax
-  401576:	39 c8                	cmp    %ecx,%eax
+  401576:	39 c8                	cmp    %ecx,%eax //ecx is input integer
   401578:	75 f5                	jne    40156f <phase_6+0x65>
   40157a:	48 89 14 f4          	mov    %rdx,(%rsp,%rsi,8)
   40157e:	48 83 c6 01          	add    $0x1,%rsi
@@ -671,14 +671,14 @@ Disassembly of section .text:
   40184d:	e8 6e f8 ff ff       	callq  4010c0 <exit@plt>
 
 0000000000401852 <read_six_numbers>:
-  401852:	48 83 ec 08          	sub    $0x8,%rsp
-  401856:	48 89 f2             	mov    %rsi,%rdx
-  401859:	48 8d 4e 04          	lea    0x4(%rsi),%rcx
-  40185d:	48 8d 46 14          	lea    0x14(%rsi),%rax
-  401861:	50                   	push   %rax
-  401862:	48 8d 46 10          	lea    0x10(%rsi),%rax
-  401866:	50                   	push   %rax
-  401867:	4c 8d 4e 0c          	lea    0xc(%rsi),%r9
+  401852:	48 83 ec 08          	sub    $0x8,%rsp //reserve space for 2 integers on stack
+  401856:	48 89 f2             	mov    %rsi,%rdx //initialize var1, set = to param2
+  401859:	48 8d 4e 04          	lea    0x4(%rsi),%rcx //store the address 4 + whatever is at rsi into param4
+  40185d:	48 8d 46 14          	lea    0x14(%rsi),%rax //store address of rsi + 14 to rax (return reg)
+  401861:	50                   	push   %rax //push rax onto stack
+  401862:	48 8d 46 10          	lea    0x10(%rsi),%rax // add 10 + rsi onto rax
+  401866:	50                   	push   %rax //push rax
+  401867:	4c 8d 4e 0c          	lea    0xc(%rsi),%r9 
   40186b:	4c 8d 46 08          	lea    0x8(%rsi),%r8
   40186f:	be a2 23 40 00       	mov    $0x4023a2,%esi
   401874:	b8 00 00 00 00       	mov    $0x0,%eax
