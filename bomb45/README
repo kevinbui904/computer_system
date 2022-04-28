@@ -1,3 +1,32 @@
 This is bomb 45.
 
 It belongs to buik (buik@carleton.edu)
+
+Notes for readers:
+1. use gdb to figure out where the string being compared is stored
+2. The trick for this is that there is a loop involved, use gdb to figure out which register is being used to store the counter. Don't spend time on read_six_numbers, it's literally just a function that puts the number of arguments "successfully assigned" into the %rax register. 
+Scanf reading: 
+https://www.programiz.com/cpp-programming/library-function/cstdio/scanf#:~:text=scanf%20%28%29%20Return%20value%201%20If%20successful%2C%20the,first%20receiving%20argument%20was%20assigned%2C%20EOF%20is%20returned.
+
+3. Figure out how many inputs you need to provide for this one (hint: scanf), then figure out which of the argument is being relevant.
+4. Figure out what's being compared here. Again, what does scanf do?
+5. That's a bitwise and, figure out how to use that to force the conditional you need
+6. There are 3 loops in here, just like phase_2 figure out where the counter is (hint: the counters don't rely on your input). Then, for one of the loop, pay VERY close attention to the value it's acting on (hint: pointers)
+
+Other useful things:
+
+To make the .s file for printing/note taking:
+    objdump -d bomb-quiet > [ file_name ]  
+        --> dump entire file
+
+    gdb -batch bomb -ex 'disas FUNCTION_NAME' > [ file_name ]  
+        --> dump only the function you need, how you make phase_2-asm 
+
+All gdb commands used by moi:
+    break [ phase_n ]
+    run defuse.txt
+    layout asm
+    layout reg
+    nexti
+    
+
