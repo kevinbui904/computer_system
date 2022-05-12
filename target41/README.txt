@@ -26,3 +26,6 @@ can compile (use flag -Og) and disassemble it to look for gadgets.
 Utility program to generate byte sequences.  See documentation in lab
 handout.
 
+
+
+NOTE for future readers: for these exploits, think about hwo the stacks are being constructed (callq and pushq BOTH changes the thing stored at RSP, but callq specifically puts in a return address). For buffer overflow, how would you know how far away the buffer is from the return address (HINT: stacks grows from a high memory address to a lower one...so look for a subtraction). For random overwriting...think about what's at the bottom of the current return address (e.g. at a higher address from the current return), chances are you could overwrite those too ;D

