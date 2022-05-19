@@ -217,25 +217,49 @@ static void place(void *bp, size_t asize)
 
     else
     {
-        // divide up the current bp block into the smallest possible units of size 16 (for alignment),
-        // then figure out how many of these we need to accomodate asize, the rest will
-        // be "coalesed" into a bigger block to be used later
+        // make the allocated block the first parts of the heap, then everything after can just be its own free block
 
         /*BEFORE
             =============================================================
             ...|hdr (16n:f)|................................|ftr(16n:f)|...
             =============================================================
 
-
-        AFTER (only in theory, we're not going to actually construct the footers and headers,
-                just need to figure out how many "smallest" chunks we can make, each units are
-                a multiple of 16, so adding them up will still yield 16)
-            =================================================================================
-            ...|hdr (16:f)||fr (16:f)| |hdr (16:f)||fr (16:f)| ... |hdr (16:f)||fr (16:f)|...
-            =================================================================================
+        AFTER, we should have a block like this
+            ===============================================================================================================
+            ...|hdr (asize:a)|..............|ftr(asizen:a)|| hdr(current_size-asize:f) | ... |ftr(current_size-asize:f)|...
+            ===============================================================================================================
         */
 
-        size_t units_count = GET_SIZE(HDRP(bp)) / 32;
+        /*
+             Locate the header of bp, then construct out a new header/footer with asize,
+             then go to the next block, and give it the "remaining size"
+        */
+
+        // allocate the new header and footer
+        PUT(HDRP(bp), PACK(asize, 1));
+        PUT(FTRP(bp), PACK(asize, 1));
+
+        /*
+        Go to the next block
+        NOTE: this block is currently NOT a footer NOR header, we're going to need to make it a footer/header
+        */
+
+        // this is where BP is after calling NEXT_BLKP
+        /*                                              HERE
+        ===============================================================================================================
+        ...|hdr (asize:a)|..............|ftr(asizen:a)|| ..................................... |ftr(current_size:f)|...
+        ===============================================================================================================
+        */
+        bp = NEXT_BLKP(bp);
+
+        size_t remaining = current_size - asize;
+        // need to make this a HEADER block
+        PUT(HDRP(bp), PACK(remaining, 0));
+
+        // now calculate the FTR block and pack that with the right info
+        // both blocks are still freed
+        PUT(FTRP(bp), PACK(remaining, 0));
+        check_heap(__LINE__);
     }
 }
 
@@ -247,10 +271,66 @@ static void place(void *bp, size_t asize)
  */
 static void *coalesce(void *bp)
 {
-    // TODO: improve this function
 
-    // REPLACE THIS
-    // currently does no coalescing
+    // we need to get the size of the block that just got freed first
+    size_t size = GET_SIZE(HDRP(bp));
+    /*
+    There are 4 cases to consider here.
+    0) Trivial case, previous AND next blocks are allocated
+    1) Previous block is freed
+    2) Next block is freed
+    3) BOTH blocks are freed
+    */
+
+    // check if the block to the prev/next of BP is freed
+
+    size_t prev_alloc = GET_ALLOC(HDRP(PREV_BLKP(bp)));
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+
+    // TRIVIAL 0 case
+    if (prev_alloc && next_alloc)
+    {
+        return bp;
+    }
+
+    // CASE 1
+    /*
+    NOTE: need to change BP here because the previous block is added
+        e.g. after we pack our bp would be at the "old" header
+
+                                          OLD HDR
+        ===============================================================================================================
+        ...|hdr (size:f)|........................................|ftr(size:f)|||hdr (16n:a)|..............|ftr(16n:a)||
+        ===============================================================================================================
+    */
+    else if (!prev_alloc && next_alloc)
+    {
+        size = size + GET_SIZE(HDRP(PREV_BLKP(bp)));
+        PUT(FTRP(bp), PACK(size, 0));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+        bp = PREV_BLKP(bp);
+    }
+
+    // CASE 2
+    /*
+    NOTE: FTRP is calculated using the HDRP, so if we change the header to reflect the new size,
+        the new FTRP would already be in the correct place.
+    */
+    else if (prev_alloc && !next_alloc)
+    {
+        size = size + GET_SIZE(HDRP(NEXT_BLKP(bp)));
+        PUT(HDRP(bp), PACK(size, 0));
+        PUT(FTRP(bp), PACK(size, 0));
+    }
+
+    // CASE 3
+    else
+    {
+        size = size + GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+        PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+        bp = PREV_BLKP(bp);
+    }
     return bp;
 }
 
