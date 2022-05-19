@@ -1,7 +1,7 @@
 /*
  * CS 208 Lab 4: Malloc Lab
  *
- * <Please put your name and userid here>
+ * <Thien K. M. Bui buik@carleton.edu>
  *
  * Simple allocator based on implicit free lists, first fit search,
  * and boundary tag coalescing.
