@@ -39,10 +39,10 @@
 #include "memlib.h"
 
 /* Basic constants and macros */
-#define WSIZE       8       /* word size (bytes) */
-#define DSIZE       16      /* doubleword size (bytes) */
-#define CHUNKSIZE  (1<<12)  /* initial heap size (bytes) */
-#define OVERHEAD    16      /* overhead of header and footer (bytes) */
+#define WSIZE 8             /* word size (bytes) */
+#define DSIZE 16            /* doubleword size (bytes) */
+#define CHUNKSIZE (1 << 12) /* initial heap size (bytes) */
+#define OVERHEAD 16         /* overhead of header and footer (bytes) */
 
 /* NOTE: feel free to replace these macros with helper functions and/or
  * add new ones that will be useful for you. Just make sure you think
@@ -50,27 +50,27 @@
  */
 
 /* Pack a size and allocated bit into a word */
-#define PACK(size, alloc)  ((size) | (alloc))
+#define PACK(size, alloc) ((size) | (alloc))
 
 /* Read and write a word at address p */
-#define GET(p)       (*(size_t *)(p))
-#define PUT(p, val)  (*(size_t *)(p) = (val))
+#define GET(p) (*(size_t *)(p))
+#define PUT(p, val) (*(size_t *)(p) = (val))
 
 /* Perform unscaled pointer arithmetic */
 #define PADD(p, val) ((char *)(p) + (val))
 #define PSUB(p, val) ((char *)(p) - (val))
 
 /* Read the size and allocated fields from address p */
-#define GET_SIZE(p)  (GET(p) & ~0xf)
+#define GET_SIZE(p) (GET(p) & ~0xf)
 #define GET_ALLOC(p) (GET(p) & 0x1)
 
 /* Given block ptr bp, compute address of its header and footer */
-#define HDRP(bp)       (PSUB(bp, WSIZE))
-#define FTRP(bp)       (PADD(bp, GET_SIZE(HDRP(bp)) - DSIZE))
+#define HDRP(bp) (PSUB(bp, WSIZE))
+#define FTRP(bp) (PADD(bp, GET_SIZE(HDRP(bp)) - DSIZE))
 
 /* Given block ptr bp, compute address of next and previous blocks */
-#define NEXT_BLKP(bp)  (PADD(bp, GET_SIZE(HDRP(bp))))
-#define PREV_BLKP(bp)  (PSUB(bp, GET_SIZE((PSUB(bp, DSIZE)))))
+#define NEXT_BLKP(bp) (PADD(bp, GET_SIZE(HDRP(bp))))
+#define PREV_BLKP(bp) (PSUB(bp, GET_SIZE((PSUB(bp, DSIZE)))))
 
 /* Global variables */
 
@@ -95,15 +95,16 @@ static size_t max(size_t x, size_t y);
  * <What is the function's return value?>
  * <Are there any preconditions or postconditions?>
  */
-int mm_init(void) {
+int mm_init(void)
+{
     /* create the initial empty heap */
     if ((heap_start = mem_sbrk(4 * WSIZE)) == NULL)
         return -1;
 
-    PUT(heap_start, 0);                        /* alignment padding */
+    PUT(heap_start, 0);                               /* alignment padding */
     PUT(PADD(heap_start, WSIZE), PACK(OVERHEAD, 1));  /* prologue header */
     PUT(PADD(heap_start, DSIZE), PACK(OVERHEAD, 1));  /* prologue footer */
-    PUT(PADD(heap_start, WSIZE + DSIZE), PACK(0, 1));   /* epilogue header */
+    PUT(PADD(heap_start, WSIZE + DSIZE), PACK(0, 1)); /* epilogue header */
 
     heap_start = PADD(heap_start, DSIZE); /* start the heap at the (size 0) payload of the prologue block */
 
@@ -120,7 +121,8 @@ int mm_init(void) {
  * <What is the function's return value?>
  * <Are there any preconditions or postconditions?>
  */
-void *mm_malloc(size_t size) {
+void *mm_malloc(size_t size)
+{
     size_t asize;      /* adjusted block size */
     size_t extendsize; /* amount to extend heap if no fit */
     char *bp;
@@ -130,15 +132,19 @@ void *mm_malloc(size_t size) {
         return NULL;
 
     /* Adjust block size to include overhead and alignment reqs. */
-    if (size <= DSIZE) {
+    if (size <= DSIZE)
+    {
         asize = DSIZE + OVERHEAD;
-    } else {
+    }
+    else
+    {
         /* Add overhead and then round up to nearest multiple of double-word alignment */
         asize = DSIZE * ((size + (OVERHEAD) + (DSIZE - 1)) / DSIZE);
     }
 
     /* Search the free list for a fit */
-    if ((bp = find_fit(asize)) != NULL) {
+    if ((bp = find_fit(asize)) != NULL)
+    {
         place(bp, asize);
         return bp;
     }
@@ -154,16 +160,40 @@ void *mm_malloc(size_t size) {
 
 /*
  * mm_free -- <What does this function do?>
+ mark allocated blocks as "free" (e.g. change the header/footer use block to "0")
  * <What are the function's arguments?>
+ pointer to the start of an allocated payload
  * <What is the function's return value?>
+ nothing
  * <Are there any preconditions or postconditions?>
+ precondition: block must have been allocated
+ coalese
  */
-void mm_free(void *bp) {
-    // TODO: implement this function
+void mm_free(void *bp)
+{
+    /*
+    TODO:
+        find the memory chunk "bp" in our heap and set the allocated bit to 0
+        illustration
+
+ * begin                                                                                                                    end
+ * heap                              start                                         want                                     heap
+ *  -----------------------------------------------------------------------------------------------------------------------------
+ * |  pad   | hdr(16:a) | ftr(16:a) |                                              | hdr(32:a) |---| ftr(32:a)|     | hdr(0:a) |
+ *  -----------------------------------------------------------------------------------------------------------------------------
+ *          |       prologue        |                       | epilogue |
+ *          |         block         |                       | block    |
+
+    just  PACK the allocated byte there with 0 instead of 1
+    */
+
+    // since PACK require 2 parameter, we grab the size stored in the current header/footer and only change the allocated bit to 0
+    // this is the exact same code as "place", just switch out 1 for 0
+    PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
+    PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
 }
 
 /* The remaining routines are internal helper routines */
-
 
 /*
  * place -- Place block of asize bytes at start of free block bp
@@ -172,13 +202,41 @@ void mm_free(void *bp) {
  * Returns nothing
  * <Are there any preconditions or postconditions?>
  */
-static void place(void *bp, size_t asize) {
-    // TODO: improve this function
+static void place(void *bp, size_t asize)
+{
 
-    // REPLACE THIS
-    // currently does no splitting, just allocates the entire free block
-    PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
-    PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
+    // need to check how big this available block is, then figure out if we could split it to fit the asize
+    // the blocks NEED to be at least 32 bytes
+
+    size_t current_size = GET_SIZE(HDRP(bp));
+    if (current_size - asize < 32)
+    {
+        PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
+        PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
+    }
+
+    else
+    {
+        // divide up the current bp block into the smallest possible units of size 16 (for alignment),
+        // then figure out how many of these we need to accomodate asize, the rest will
+        // be "coalesed" into a bigger block to be used later
+
+        /*BEFORE
+            =============================================================
+            ...|hdr (16n:f)|................................|ftr(16n:f)|...
+            =============================================================
+
+
+        AFTER (only in theory, we're not going to actually construct the footers and headers,
+                just need to figure out how many "smallest" chunks we can make, each units are
+                a multiple of 16, so adding them up will still yield 16)
+            =================================================================================
+            ...|hdr (16:f)||fr (16:f)| |hdr (16:f)||fr (16:f)| ... |hdr (16:f)||fr (16:f)|...
+            =================================================================================
+        */
+
+        size_t units_count = GET_SIZE(HDRP(bp)) / 32;
+    }
 }
 
 /*
@@ -187,7 +245,8 @@ static void place(void *bp, size_t asize) {
  * Return ptr to coalesced block
  * <Are there any preconditions or postconditions?>
  */
-static void *coalesce(void *bp) {
+static void *coalesce(void *bp)
+{
     // TODO: improve this function
 
     // REPLACE THIS
@@ -195,24 +254,26 @@ static void *coalesce(void *bp) {
     return bp;
 }
 
-
 /*
  * find_fit - Find a fit for a block with asize bytes
  */
-static void *find_fit(size_t asize) {
+static void *find_fit(size_t asize)
+{
     /* search from the start of the free list to the end */
-    for (char *cur_block = heap_start; GET_SIZE(HDRP(cur_block)) > 0; cur_block = NEXT_BLKP(cur_block)) {
+    for (char *cur_block = heap_start; GET_SIZE(HDRP(cur_block)) > 0; cur_block = NEXT_BLKP(cur_block))
+    {
         if (!GET_ALLOC(HDRP(cur_block)) && (asize <= GET_SIZE(HDRP(cur_block))))
             return cur_block;
     }
 
-    return NULL;  /* no fit found */
+    return NULL; /* no fit found */
 }
 
 /*
  * extend_heap - Extend heap with free block and return its block pointer
  */
-static void *extend_heap(size_t words) {
+static void *extend_heap(size_t words)
+{
     char *bp;
     size_t size;
 
@@ -239,21 +300,26 @@ static void *extend_heap(size_t words) {
  * Checks include proper prologue and epilogue, alignment, and matching header and footer
  * Takes a line number (to give the output an identifying tag).
  */
-static bool check_heap(int line) {
+static bool check_heap(int line)
+{
     char *bp;
 
-    if ((GET_SIZE(HDRP(heap_start)) != DSIZE) || !GET_ALLOC(HDRP(heap_start))) {
+    if ((GET_SIZE(HDRP(heap_start)) != DSIZE) || !GET_ALLOC(HDRP(heap_start)))
+    {
         printf("(check_heap at line %d) Error: bad prologue header\n", line);
         return false;
     }
 
-    for (bp = heap_start; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-        if (!check_block(line, bp)) {
+    for (bp = heap_start; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
+    {
+        if (!check_block(line, bp))
+        {
             return false;
         }
     }
 
-    if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp)))) {
+    if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
+    {
         printf("(check_heap at line %d) Error: bad epilogue header\n", line);
         return false;
     }
@@ -264,12 +330,15 @@ static bool check_heap(int line) {
 /*
  * check_block -- Checks a block for alignment and matching header and footer
  */
-static bool check_block(int line, void *bp) {
-    if ((size_t)bp % DSIZE) {
+static bool check_block(int line, void *bp)
+{
+    if ((size_t)bp % DSIZE)
+    {
         printf("(check_heap at line %d) Error: %p is not double-word aligned\n", line, bp);
         return false;
     }
-    if (GET(HDRP(bp)) != GET(FTRP(bp))) {
+    if (GET(HDRP(bp)) != GET(FTRP(bp)))
+    {
         printf("(check_heap at line %d) Error: header does not match footer\n", line);
         return false;
     }
@@ -279,12 +348,14 @@ static bool check_block(int line, void *bp) {
 /*
  * print_heap -- Prints out the current state of the implicit free list
  */
-static void print_heap() {
+static void print_heap()
+{
     char *bp;
 
     printf("Heap (%p):\n", heap_start);
 
-    for (bp = heap_start; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+    for (bp = heap_start; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
+    {
         print_block(bp);
     }
 
@@ -294,7 +365,8 @@ static void print_heap() {
 /*
  * print_block -- Prints out the current state of a block
  */
-static void print_block(void *bp) {
+static void print_block(void *bp)
+{
     size_t hsize, halloc, fsize, falloc;
 
     hsize = GET_SIZE(HDRP(bp));
@@ -302,19 +374,21 @@ static void print_block(void *bp) {
     fsize = GET_SIZE(FTRP(bp));
     falloc = GET_ALLOC(FTRP(bp));
 
-    if (hsize == 0) {
+    if (hsize == 0)
+    {
         printf("%p: End of free list\n", bp);
         return;
     }
 
     printf("%p: header: [%ld:%c] footer: [%ld:%c]\n", bp,
-       hsize, (halloc ? 'a' : 'f'),
-       fsize, (falloc ? 'a' : 'f'));
+           hsize, (halloc ? 'a' : 'f'),
+           fsize, (falloc ? 'a' : 'f'));
 }
 
 /*
  * max: returns x if x > y, and y otherwise.
  */
-static size_t max(size_t x, size_t y) {
+static size_t max(size_t x, size_t y)
+{
     return (x > y) ? x : y;
 }
