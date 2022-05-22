@@ -72,6 +72,22 @@
 #define NEXT_BLKP(bp) (PADD(bp, GET_SIZE(HDRP(bp))))
 #define PREV_BLKP(bp) (PSUB(bp, GET_SIZE((PSUB(bp, DSIZE)))))
 
+/* We'll a way to GET and SET the bytes in the padding before the prologue
+    We'll store the pointer to the head of our explicit free list here*/
+
+#define GET_START() ((PSUB(heap_start, DSIZE)))
+#define SET_START(bp) (PUT(GET_START(), (size_t)bp))
+
+/* We'll also need macros to get/set the NXT and PREV chunks of a free list node
+    These are use to read/write into the payload of a free block, which will store
+    the previous and next pointers in the first 16 bytes of the payload
+*/
+#define GET_NXT_PTR(p) ((size_t *)GET(PADD(p, WSIZE)))
+#define GET_PREV_PTR(p) ((size_t *)GET(p))
+
+#define SET_NXT_PTR(p, nxt_ptr) (PUT(PADD(p, WSIZE), nxt_ptr))
+#define SET_PREV_PTR(p, prev_ptr) (PUT(p, prev_ptr))
+
 /* Global variables */
 
 // Pointer to first block
@@ -191,6 +207,10 @@ void mm_free(void *bp)
     // this is the exact same code as "place", just switch out 1 for 0
     PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
     PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
+
+    // we add to the start of the free list EVERYTIME we free a block
+    SET_START(bp);
+    check_heap(208);
 }
 
 /* The remaining routines are internal helper routines */
