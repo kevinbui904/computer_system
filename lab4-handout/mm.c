@@ -90,11 +90,11 @@
     *  -----------------------------------------------------------------
     *                | 8 bytes | | 8 bytes  |
 */
-#define GET_NXT_PTR(p) ((void *)GET(PADD(p, WSIZE)))
-#define GET_PREV_PTR(p) ((void *)GET(p))
+#define GET_NXT_PTR(p) ((void *)GET(PADD(GET(p), WSIZE)))
+#define GET_PREV_PTR(p) ((void *)GET(GET(p)))
 
-#define SET_NXT_PTR(bp, nxt_ptr) (PUT(PADD(bp, WSIZE), (size_t)nxt_ptr))
-#define SET_PREV_PTR(bp, prev_ptr) (PUT(bp, (size_t)prev_ptr))
+#define SET_NXT_PTR(bp, ptr) (PUT(PADD(bp, WSIZE), (size_t)ptr))
+#define SET_PREV_PTR(bp, ptr) (PUT(bp, (size_t)ptr))
 
 /* Global variables */
 
@@ -185,7 +185,6 @@ void *mm_malloc(size_t size)
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL)
     {
-        printf("hello world\n");
         place(bp, asize);
         return bp;
     }
@@ -240,8 +239,9 @@ void mm_free(void *bp)
     PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
     PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
 
+    efl_push(bp);
     // we need to coalesce after freeing
-    coalesce(bp);
+    // coalesce(bp);
 }
 
 /* The remaining routines are internal helper routines */
@@ -263,6 +263,7 @@ static void efl_push(void *bp)
 
     // // write the new address to the padding bytes
     SET_START(bp);
+    printf("pushed onto stack: %p, %p\n", GET_START, GET_NXT_PTR(GET_START));
 }
 
 /*efl_remove
@@ -277,19 +278,19 @@ static void efl_remove(void *bp)
     // This only happens when the previous block is NULL
 
     fflush(stdout);
-    printf("check this thing\n");
-    if (!GET_PREV_PTR(bp))
+    printf("check this thing: %p, %p\n", GET_PREV_PTR(bp), GET_NXT_PTR(bp));
+    if (!GET_PREV_PTR(bp) && GET_NXT_PTR(bp))
     {
         printf("hello world\n");
         void *new_head = GET_NXT_PTR(bp);
-        printf("hits here\n");
+        printf("hits here: %p\n", new_head);
         SET_PREV_PTR(new_head, NULL);
         printf("hits here too\n");
 
         SET_START(new_head);
     }
     // if removing from the tail
-    else if (!GET_NXT_PTR(bp))
+    else if (!GET_NXT_PTR(bp) && GET_PREV_PTR(bp))
     {
         void *new_tail = GET_PREV_PTR(bp);
         SET_NXT_PTR(new_tail, NULL);
@@ -298,8 +299,10 @@ static void efl_remove(void *bp)
     // we HAVE bp, so just set the previous and next link
     else
     {
+        printf("hits here 301\n");
         void *prev = GET_PREV_PTR(bp);
         void *nxt = GET_NXT_PTR(bp);
+        printf("hits here 301\n");
 
         SET_NXT_PTR(prev, nxt);
         SET_PREV_PTR(nxt, prev);
@@ -332,9 +335,6 @@ static void place(void *bp, size_t asize)
         printf("Invalid argument, asize is smaller than the minimum block size\n");
         exit(1);
     }
-
-    // first thing that we do is removing bp from the free list
-    efl_remove(bp);
 
     // need to check how big this available block is, then figure out if we could split it to fit the asize
     // the blocks NEED to be at least 32 bytes
@@ -393,7 +393,6 @@ static void place(void *bp, size_t asize)
         // now calculate the FTR block and pack that with the right info
         // both blocks are still freed
         PUT(FTRP(bp), PACK(remaining, 0));
-        coalesce(bp);
     }
 }
 
@@ -424,7 +423,6 @@ static void *coalesce(void *bp)
     // TRIVIAL 0 case
     if (prev_alloc && next_alloc)
     {
-        efl_push(bp);
         return bp;
     }
 
@@ -479,27 +477,24 @@ static void *coalesce(void *bp)
  */
 static void *find_fit(size_t asize)
 {
-    // fflush(stdout);
-    // printf("what the fuck: %li\n", asize);
-    // /* search from the start of the free list to the end */
-    // // simple list iterator
-    // void *cur_block = GET_START;
-    // printf("check this: %p\n", cur_block);
-    // check_heap(470);
-    // while (GET_SIZE(HDRP(cur_block)) < asize && cur_block != NULL)
+
+    // void *cur_block;
+    // cur_block = GET_START;
+
+    // while (cur_block)
     // {
-    //     cur_block = (void *)GET_NXT_PTR(cur_block);
-    //     printf("check this2: %p\n", cur_block);
+    //     printf("Does this not work?: %p\n", (void *)GET(cur_block));
+    //     if (GET(cur_block) && GET_SIZE(HDRP(GET(cur_block))) > asize)
+    //     {
+    //         return cur_block;
+    //     }
+    //     cur_block = GET_NXT_PTR(cur_block);
     // }
-
-    // return (void *)cur_block;
-
-    for (char *cur_block = heap_start; GET_SIZE(HDRP(cur_block)) > 0; cur_block = NEXT_BLKP(cur_block))
-    {
-        if (!GET_ALLOC(HDRP(cur_block)) && (asize <= GET_SIZE(HDRP(cur_block))))
-            return cur_block;
-    }
-    assert(check_heap(485) && "heap check failed\n");
+    // for (void *cur_block = GET_START; GET_SIZE(HDRP(GET(cur_block))) > 0; cur_block = GET_NXT_PTR(cur_block))
+    // {
+    //     if (!GET_ALLOC(HDRP(cur_block)) && (asize <= GET_SIZE(HDRP(cur_block))))
+    //         return cur_block;
+    // }
     return NULL; /* no fit found */
 }
 
@@ -524,8 +519,10 @@ static void *extend_heap(size_t words)
     PUT(FTRP(bp), PACK(size, 0));         /* free block footer */
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* new epilogue header */
 
+    efl_push(bp);
+    return bp;
     /* Coalesce if the previous block was free */
-    return coalesce(bp);
+    // return coalesce(bp);
 }
 
 /*
@@ -585,9 +582,6 @@ static bool check_block(int line, void *bp)
 static void print_heap()
 {
     char *bp;
-
-    printf("Heap (%p):\n", heap_start);
-
     for (bp = heap_start; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
     {
         print_block(bp);
