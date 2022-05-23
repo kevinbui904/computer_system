@@ -75,18 +75,26 @@
 /* We'll a way to GET and SET the bytes in the padding before the prologue
     We'll store the pointer to the head of our explicit free list here*/
 
-#define GET_START() ((PSUB(heap_start, DSIZE)))
-#define SET_START(bp) (PUT(GET_START(), (size_t)bp))
+#define GET_START ((void *)GET(PSUB(heap_start, DSIZE)))
+#define SET_START(bp) (PUT(PSUB(heap_start, DSIZE), (size_t)bp))
 
 /* We'll also need macros to get/set the NXT and PREV chunks of a free list node
     These are use to read/write into the payload of a free block, which will store
     the previous and next pointers in the first 16 bytes of the payload
-*/
-#define GET_NXT_PTR(p) ((size_t *)GET(PADD(p, WSIZE)))
-#define GET_PREV_PTR(p) ((size_t *)GET(p))
 
-#define SET_NXT_PTR(p, nxt_ptr) (PUT(PADD(p, WSIZE), nxt_ptr))
-#define SET_PREV_PTR(p, prev_ptr) (PUT(p, prev_ptr))
+    free blocks would look like this
+    * begin                                                             end
+    * heap                                                             heap
+    *  -----------------------------------------------------------------
+    * | hdr(16n:f) | |prev addr| | nxt addr |                    ftr(16n:f)
+    *  -----------------------------------------------------------------
+    *                | 8 bytes | | 8 bytes  |
+*/
+#define GET_NXT_PTR(p) ((void *)GET(PADD(p, WSIZE)))
+#define GET_PREV_PTR(p) ((void *)GET(p))
+
+#define SET_NXT_PTR(p, nxt_ptr) (PUT(PADD(p, WSIZE), (size_t)nxt_ptr))
+#define SET_PREV_PTR(p, prev_ptr) (PUT(p, (size_t)prev_ptr))
 
 /* Global variables */
 
@@ -105,11 +113,24 @@ static void *coalesce(void *bp);
 static void place(void *bp, size_t asize);
 static size_t max(size_t x, size_t y);
 
+// functions not provided by assignment
+static void efl_push(void *bp);
+
 /*
- * mm_init -- <What does this function do?>
- * <What are the function's arguments?>
- * <What is the function's return value?>
- * <Are there any preconditions or postconditions?>
+ * mm_init
+    Initialize an empty heap by setting up the prologue and epilogue blocks.
+    Sets start to an empty value
+    After running the function the heap looks like this
+
+    *  -----------------------------------------------------------------
+    * |  pad   | hdr(16:a) | ftr(16:a) | zero or more usr blks | hdr(0:a) |
+    *  -----------------------------------------------------------------
+    *          |       prologue        |                       | epilogue |
+    *          |         block         |                       | block    |
+    *
+    NOTE: does not take in an argument
+    NOTE: if for some reason C can't "extend" the heap by 32 bytes at the start,
+    the function will return -1 and the traces should terminate
  */
 int mm_init(void)
 {
@@ -124,6 +145,8 @@ int mm_init(void)
 
     heap_start = PADD(heap_start, DSIZE); /* start the heap at the (size 0) payload of the prologue block */
 
+    // make the start of efl NULL
+    SET_START(NULL);
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
@@ -132,10 +155,11 @@ int mm_init(void)
 }
 
 /*
- * mm_malloc -- <What does this function do?>
- * <What are the function's arguments?>
- * <What is the function's return value?>
- * <Are there any preconditions or postconditions?>
+ * mm_malloc
+ * Allocate space on the heap
+@param: integer size will determine how many bytes to allocate onto the heap
+@return: this function returns a pointer to the allocated heap address
+NOTE: if size is < 0, the function will do nothing. IT WILL NOT THROW AN ERROR
  */
 void *mm_malloc(size_t size)
 {
@@ -161,6 +185,7 @@ void *mm_malloc(size_t size)
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL)
     {
+        printf("hello world\n");
         place(bp, asize);
         return bp;
     }
@@ -175,68 +200,139 @@ void *mm_malloc(size_t size)
 }
 
 /*
- * mm_free -- <What does this function do?>
+ * mm_free
  mark allocated blocks as "free" (e.g. change the header/footer use block to "0")
- * <What are the function's arguments?>
- pointer to the start of an allocated payload
- * <What is the function's return value?>
- nothing
- * <Are there any preconditions or postconditions?>
- precondition: block must have been allocated
- coalese
+ AND
+ change the first 16 bytes of bp to store the address of a "previous" and "next"
+ pointer, we'll use this to implement our FILO explicit free list.
+@param: function takes in an address to be freed
+    (i.e. pointer to the start of an allocated payload)
+@return: this function does not return anything
+NOTE:
+    Precondition: if bp is NULL, exit program
+    Postcondition: freed block will be coalese if needed
  */
 void mm_free(void *bp)
 {
+
+    if (!bp)
+    {
+        printf("can not free a NULL pointer, exiting\n");
+        exit(1);
+    }
     /*
-    TODO:
-        find the memory chunk "bp" in our heap and set the allocated bit to 0
-        illustration
+            find the memory chunk "bp" in our heap and set the allocated bit to 0
+            illustration
 
- * begin                                                                                                                    end
- * heap                              start                                         want                                     heap
- *  -----------------------------------------------------------------------------------------------------------------------------
- * |  pad   | hdr(16:a) | ftr(16:a) |                                              | hdr(32:a) |---| ftr(32:a)|     | hdr(0:a) |
- *  -----------------------------------------------------------------------------------------------------------------------------
- *          |       prologue        |                       | epilogue |
- *          |         block         |                       | block    |
+     * begin                                                                                                                    end
+     * heap                              start                                         want                                     heap
+     *  -----------------------------------------------------------------------------------------------------------------------------
+     * |  pad   | hdr(16:a) | ftr(16:a) |                                              | hdr(32:a) |---| ftr(32:a)|     | hdr(0:a) |
+     *  -----------------------------------------------------------------------------------------------------------------------------
+     *          |       prologue        |                       | epilogue |
+     *          |         block         |                       | block    |
 
-    just  PACK the allocated byte there with 0 instead of 1
-    */
+        just  PACK the allocated byte there with 0 instead of 1
+        */
 
     // since PACK require 2 parameter, we grab the size stored in the current header/footer and only change the allocated bit to 0
     // this is the exact same code as "place", just switch out 1 for 0
     PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
     PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
 
-    // we add to the start of the free list EVERYTIME we free a block
-    SET_START(bp);
-    check_heap(208);
+    // we need to coalesce after freeing
+    coalesce(bp);
 }
 
 /* The remaining routines are internal helper routines */
 
+/*efl_push
+ * add a new node to the head of the explicit freed list
+ * @param: pointer to the new head of explicit free list
+ * @return: none
+ *  NOTE: this will ALSO write the address of the newly freed memory chunk
+ *  into the padding block (head of explicit free list)
+ */
+static void efl_push(void *bp)
+{
+    // set the first 8 bytes to NULL
+    SET_PREV_PTR(bp, NULL);
+
+    // // set bytes 8-16 to the address of the next freed chunk
+    SET_NXT_PTR(bp, GET_START);
+
+    // // write the new address to the padding bytes
+    SET_START(bp);
+}
+
+/*efl_remove
+ *remove a node from the efl
+ *@param: node pointer to be removed
+ *@return: none
+ *NOTE: this is just a simple node removal of a doubly linked list
+ */
+static void efl_remove(void *bp)
+{
+    void *current = GET_START;
+    // if removing from head
+    if (bp == current)
+    {
+        void *new_head = GET_NXT_PTR(current);
+        SET_PREV_PTR(new_head, NULL);
+        SET_START(new_head);
+    }
+    else
+    {
+        while (current != bp && current != NULL)
+        {
+            current = GET_NXT_PTR(current);
+        }
+
+        void *prev = GET_PREV_PTR(current);
+        void *nxt = GET_NXT_PTR(current);
+
+        SET_NXT_PTR(prev, nxt);
+        SET_PREV_PTR(nxt, prev);
+    }
+}
 /*
- * place -- Place block of asize bytes at start of free block bp
- *          and <How are you handling splitting?>
- * Takes a pointer to a free block and the size of block to place inside it
- * Returns nothing
+ * place -- Check if bp block can be split to accomodate asize bytes, then
+            place block of asize bytes at start of free block bp
+ *
+ * @param: Takes a pointer to a free block and the size of block to place inside it
+ * @return: nothing
  * <Are there any preconditions or postconditions?>
  */
 static void place(void *bp, size_t asize)
 {
 
+    if (!bp)
+    {
+        printf("Invalid argument: bp is NULL. Exiting\n");
+        exit(1);
+    }
+
+    if (asize < 32)
+    {
+        printf("Invalid argument, asize is smaller than the minimum block size\n");
+        exit(1);
+    }
     // need to check how big this available block is, then figure out if we could split it to fit the asize
     // the blocks NEED to be at least 32 bytes
 
     size_t current_size = GET_SIZE(HDRP(bp));
+
+    // bp is too small, don't split
     if (current_size - asize < 32)
     {
+        printf("hits here first \n");
         PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
         PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
     }
 
     else
     {
+        printf("it hits here\n");
         // make the allocated block the first parts of the heap, then everything after can just be its own free block
 
         /*BEFORE
@@ -279,7 +375,8 @@ static void place(void *bp, size_t asize)
         // now calculate the FTR block and pack that with the right info
         // both blocks are still freed
         PUT(FTRP(bp), PACK(remaining, 0));
-        check_heap(__LINE__);
+
+        check_heap(379);
     }
 }
 
@@ -310,6 +407,7 @@ static void *coalesce(void *bp)
     // TRIVIAL 0 case
     if (prev_alloc && next_alloc)
     {
+        efl_push(bp);
         return bp;
     }
 
@@ -325,6 +423,7 @@ static void *coalesce(void *bp)
     */
     else if (!prev_alloc && next_alloc)
     {
+        // efl_remove(PREV_BLKP(bp));
         size = size + GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp), PACK(size, 0));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
@@ -338,6 +437,7 @@ static void *coalesce(void *bp)
     */
     else if (prev_alloc && !next_alloc)
     {
+        // efl_remove(NEXT_BLKP(bp));
         size = size + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -346,11 +446,14 @@ static void *coalesce(void *bp)
     // CASE 3
     else
     {
+        // efl_remove(PREV_BLKP(bp));
+        // efl_remove(NEXT_BLKP(bp));
         size = size + GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
     }
+    // efl_push(bp);
     return bp;
 }
 
@@ -359,13 +462,27 @@ static void *coalesce(void *bp)
  */
 static void *find_fit(size_t asize)
 {
-    /* search from the start of the free list to the end */
+    // fflush(stdout);
+    // printf("what the fuck: %li\n", asize);
+    // /* search from the start of the free list to the end */
+    // // simple list iterator
+    // void *cur_block = GET_START;
+    // printf("check this: %p\n", cur_block);
+    // check_heap(470);
+    // while (GET_SIZE(HDRP(cur_block)) < asize && cur_block != NULL)
+    // {
+    //     cur_block = (void *)GET_NXT_PTR(cur_block);
+    //     printf("check this2: %p\n", cur_block);
+    // }
+
+    // return (void *)cur_block;
+
     for (char *cur_block = heap_start; GET_SIZE(HDRP(cur_block)) > 0; cur_block = NEXT_BLKP(cur_block))
     {
         if (!GET_ALLOC(HDRP(cur_block)) && (asize <= GET_SIZE(HDRP(cur_block))))
             return cur_block;
     }
-
+    assert(check_heap(485) && "heap check failed\n");
     return NULL; /* no fit found */
 }
 
