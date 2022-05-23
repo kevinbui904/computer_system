@@ -93,8 +93,8 @@
 #define GET_NXT_PTR(p) ((void *)GET(PADD(p, WSIZE)))
 #define GET_PREV_PTR(p) ((void *)GET(p))
 
-#define SET_NXT_PTR(p, nxt_ptr) (PUT(PADD(p, WSIZE), (size_t)nxt_ptr))
-#define SET_PREV_PTR(p, prev_ptr) (PUT(p, (size_t)prev_ptr))
+#define SET_NXT_PTR(bp, nxt_ptr) (PUT(PADD(bp, WSIZE), (size_t)nxt_ptr))
+#define SET_PREV_PTR(bp, prev_ptr) (PUT(bp, (size_t)prev_ptr))
 
 /* Global variables */
 
@@ -273,23 +273,33 @@ static void efl_push(void *bp)
  */
 static void efl_remove(void *bp)
 {
-    void *current = GET_START;
     // if removing from head
-    if (bp == current)
+    // This only happens when the previous block is NULL
+
+    fflush(stdout);
+    printf("check this thing\n");
+    if (!GET_PREV_PTR(bp))
     {
-        void *new_head = GET_NXT_PTR(current);
+        printf("hello world\n");
+        void *new_head = GET_NXT_PTR(bp);
+        printf("hits here\n");
         SET_PREV_PTR(new_head, NULL);
+        printf("hits here too\n");
+
         SET_START(new_head);
     }
+    // if removing from the tail
+    else if (!GET_NXT_PTR(bp))
+    {
+        void *new_tail = GET_PREV_PTR(bp);
+        SET_NXT_PTR(new_tail, NULL);
+    }
+
+    // we HAVE bp, so just set the previous and next link
     else
     {
-        while (current != bp && current != NULL)
-        {
-            current = GET_NXT_PTR(current);
-        }
-
-        void *prev = GET_PREV_PTR(current);
-        void *nxt = GET_NXT_PTR(current);
+        void *prev = GET_PREV_PTR(bp);
+        void *nxt = GET_NXT_PTR(bp);
 
         SET_NXT_PTR(prev, nxt);
         SET_PREV_PTR(nxt, prev);
@@ -305,10 +315,15 @@ static void efl_remove(void *bp)
  */
 static void place(void *bp, size_t asize)
 {
-
     if (!bp)
     {
         printf("Invalid argument: bp is NULL. Exiting\n");
+        exit(1);
+    }
+
+    if (GET_ALLOC(HDRP(bp)))
+    {
+        printf("Invalid pointed: bp already allocated. Exiting\n");
         exit(1);
     }
 
@@ -317,22 +332,25 @@ static void place(void *bp, size_t asize)
         printf("Invalid argument, asize is smaller than the minimum block size\n");
         exit(1);
     }
+
+    // first thing that we do is removing bp from the free list
+    efl_remove(bp);
+
     // need to check how big this available block is, then figure out if we could split it to fit the asize
     // the blocks NEED to be at least 32 bytes
 
     size_t current_size = GET_SIZE(HDRP(bp));
 
+    // efl_remove(bp);
     // bp is too small, don't split
     if (current_size - asize < 32)
     {
-        printf("hits here first \n");
         PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
         PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
     }
 
     else
     {
-        printf("it hits here\n");
         // make the allocated block the first parts of the heap, then everything after can just be its own free block
 
         /*BEFORE
@@ -375,8 +393,7 @@ static void place(void *bp, size_t asize)
         // now calculate the FTR block and pack that with the right info
         // both blocks are still freed
         PUT(FTRP(bp), PACK(remaining, 0));
-
-        check_heap(379);
+        coalesce(bp);
     }
 }
 
