@@ -115,6 +115,7 @@ static size_t max(size_t x, size_t y);
 
 // functions not provided by assignment
 static void efl_push(void *bp);
+static void efl_remove(void *bp);
 
 /*
  * mm_init
@@ -157,9 +158,10 @@ int mm_init(void)
 /*
  * mm_malloc
  * Allocate space on the heap
-@param: integer size will determine how many bytes to allocate onto the heap
-@return: this function returns a pointer to the allocated heap address
-NOTE: if size is < 0, the function will do nothing. IT WILL NOT THROW AN ERROR
+ * @param: integer size will determine how many bytes to allocate onto the heap
+ * @return: this function returns a pointer to the allocated heap address
+ * NOTE: if size is < 0, the function will do nothing. This function will not throw
+ *      errors to increase throughput
  */
 void *mm_malloc(size_t size)
 {
@@ -199,26 +201,23 @@ void *mm_malloc(size_t size)
 }
 
 /*
- * mm_free
- mark allocated blocks as "free" (e.g. change the header/footer use block to "0")
- AND
- change the first 16 bytes of bp to store the address of a "previous" and "next"
- pointer, we'll use this to implement our FILO explicit free list.
+mm_free
+mark allocated blocks as "free" (e.g. change the header/footer use block to "0")
+AND
+change the first 16 bytes of bp to store the address of a "previous" and "next"
+pointer, we'll use this to implement our FILO explicit free list.
+
 @param: function takes in an address to be freed
     (i.e. pointer to the start of an allocated payload)
 @return: this function does not return anything
+
 NOTE:
-    Precondition: if bp is NULL, exit program
+    Precondition: if bp is NULL, we'll get a segfault. This function
+        will not throw errors to slightly increase speed.
     Postcondition: freed block will be coalese if needed
  */
 void mm_free(void *bp)
 {
-
-    if (!bp)
-    {
-        printf("can not free a NULL pointer, exiting\n");
-        exit(1);
-    }
     /*
             find the memory chunk "bp" in our heap and set the allocated bit to 0
             illustration
@@ -239,7 +238,8 @@ void mm_free(void *bp)
     PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
     PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
 
-    // we need to coalesce after freeing
+    // we need to coalesce after freeing,
+    // our freed node will be added to the efl in coalesce
     coalesce(bp);
 }
 
@@ -261,16 +261,15 @@ static void efl_push(void *bp)
     {
         SET_PREV_PTR(head, bp);
     }
-    // set the first 8 bytes to NULL
+    // set the first 8 bytes of bp to NULL
+    // bp will be our new head
     SET_PREV_PTR(bp, NULL);
 
     // // set bytes 8-16 to the address of the next freed chunk
     SET_NXT_PTR(bp, head);
-    // printf("before pushed stack: %p\n", head);
 
     // // write the new address to the padding bytes
     SET_START(bp);
-    // printf("pushed onto stack: %p, %p, %li\n", GET_START, GET_NXT_PTR(GET_START), GET_SIZE(HDRP(GET_START)));
 }
 
 /*efl_remove
@@ -285,14 +284,12 @@ static void efl_remove(void *bp)
     // CASE 1: when bp is the ONLY node in the efl
     if (!GET_PREV_PTR(bp) && !GET_NXT_PTR(bp))
     {
-        // printf("remove only head\n");
         SET_START(NULL);
     }
     // CASE 2: when removing from the head, but the list size > 1
 
     else if (!GET_PREV_PTR(bp))
     {
-        // printf("remove from head when size > 1\n");
         void *new_head = GET_NXT_PTR(bp);
         SET_PREV_PTR(new_head, NULL);
         SET_START(new_head);
@@ -300,8 +297,6 @@ static void efl_remove(void *bp)
 
     else if (!GET_NXT_PTR(bp))
     {
-        // printf("remove from tail when size > 1\n");
-
         void *new_tail = GET_PREV_PTR(bp);
         SET_NXT_PTR(new_tail, NULL);
     }
@@ -309,8 +304,6 @@ static void efl_remove(void *bp)
     // we HAVE bp, so just set the previous and next link
     else
     {
-        // printf("remove in middle\n");
-
         void *prev = GET_PREV_PTR(bp);
         void *nxt = GET_NXT_PTR(bp);
 
@@ -324,27 +317,16 @@ static void efl_remove(void *bp)
  *
  * @param: Takes a pointer to a free block and the size of block to place inside it
  * @return: nothing
- * <Are there any preconditions or postconditions?>
+ *
+ * NOTE:
+ *  precondition: if bp is NULL, allocated (i.e. the allocated bit is set incorrectly), or
+ *  if asize < 32, we will run into issues with invalid heap construction. We will not be
+ *  checking for these in favor of speed
+ *
+ *
  */
 static void place(void *bp, size_t asize)
 {
-    // if (!bp)
-    // {
-    //     printf("Invalid argument: bp is NULL. Exiting\n");
-    //     exit(1);
-    // }
-
-    // if (GET_ALLOC(HDRP(bp)))
-    // {
-    //     printf("Invalid pointed: bp already allocated. Exiting\n");
-    //     exit(1);
-    // }
-
-    // if (asize < 32)
-    // {
-    //     printf("Invalid argument, asize is smaller than the minimum block size\n");
-    //     exit(1);
-    // }
 
     // need to check how big this available block is, then figure out if we could split it to fit the asize
     // the blocks NEED to be at least 32 bytes
@@ -355,7 +337,6 @@ static void place(void *bp, size_t asize)
     // bp is too small, don't split
     if (current_size - asize < 32)
     {
-        // printf("does not split\n");
         PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
         PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
         efl_remove(bp);
@@ -381,10 +362,13 @@ static void place(void *bp, size_t asize)
              then go to the next block, and give it the "remaining size"
         */
 
-        // allocate the new header and footer
+        // allocate the new header and footer and then remove bp from efl
+        // NOTE: removing from efl here makes it possible to treat the splitted off portion
+        //      as its own entity.
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
         efl_remove(bp);
+
         /*
         Go to the next block
         NOTE: this block is currently NOT a footer NOR header, we're going to need to make it a footer/header
@@ -405,6 +389,9 @@ static void place(void *bp, size_t asize)
         // now calculate the FTR block and pack that with the right info
         // both blocks are still freed
         PUT(FTRP(bp), PACK(remaining, 0));
+
+        // we handle all of our splitting removal in coalesce to minimize the amount of
+        // access point into our efl.
         coalesce(bp);
     }
 }
@@ -413,7 +400,13 @@ static void place(void *bp, size_t asize)
  * coalesce -- Boundary tag coalescing.
  * Takes a pointer to a free block
  * Return ptr to coalesced block
- * <Are there any preconditions or postconditions?>
+ * NOTE:
+ *  Precondition: function assumes that bp is valid. I.e. bp is a freed block
+ *  Postcondition: we will do most of our removal/pushing of EFL here
+ *
+ * NOTE:
+ *  the trick behind this is that we'll simply remove ALL the mergable blocks
+ *  from EFL, then we'll merge them and push the merged chunk back into the list.
  */
 static void *coalesce(void *bp)
 {
@@ -432,7 +425,7 @@ static void *coalesce(void *bp)
     size_t prev_alloc = GET_ALLOC(HDRP(PREV_BLKP(bp)));
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
 
-    // TRIVIAL 0 case
+    // TRIVIAL 0 case, push the freed block onto EFL per FILO protocol
     if (prev_alloc && next_alloc)
     {
         efl_push(bp);
@@ -451,7 +444,6 @@ static void *coalesce(void *bp)
     */
     else if (!prev_alloc && next_alloc)
     {
-        printf("does it hits this?\n");
         efl_remove(PREV_BLKP(bp));
         size = size + GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp), PACK(size, 0));
@@ -466,8 +458,6 @@ static void *coalesce(void *bp)
     */
     else if (prev_alloc && !next_alloc)
     {
-        printf("does it hits this instead?\n");
-
         efl_remove(NEXT_BLKP(bp));
         size = size + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
@@ -477,8 +467,6 @@ static void *coalesce(void *bp)
     // CASE 3
     else
     {
-        printf("does it hits this else?\n");
-
         efl_remove(PREV_BLKP(bp));
         efl_remove(NEXT_BLKP(bp));
         size = size + GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
