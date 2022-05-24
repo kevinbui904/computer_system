@@ -90,8 +90,8 @@
     *  -----------------------------------------------------------------
     *                | 8 bytes | | 8 bytes  |
 */
-#define GET_NXT_PTR(p) ((void *)GET(PADD(GET(p), WSIZE)))
-#define GET_PREV_PTR(p) ((void *)GET(GET(p)))
+#define GET_NXT_PTR(p) ((void *)GET(PADD(p, WSIZE)))
+#define GET_PREV_PTR(p) ((void *)GET(p))
 
 #define SET_NXT_PTR(bp, ptr) (PUT(PADD(bp, WSIZE), (size_t)ptr))
 #define SET_PREV_PTR(bp, ptr) (PUT(bp, (size_t)ptr))
@@ -239,9 +239,8 @@ void mm_free(void *bp)
     PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
     PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 0));
 
-    efl_push(bp);
     // we need to coalesce after freeing
-    // coalesce(bp);
+    coalesce(bp);
 }
 
 /* The remaining routines are internal helper routines */
@@ -255,15 +254,23 @@ void mm_free(void *bp)
  */
 static void efl_push(void *bp)
 {
+    void *head = GET_START;
+
+    // if the current head is not NULL, set its prev node to bp
+    if (head)
+    {
+        SET_PREV_PTR(head, bp);
+    }
     // set the first 8 bytes to NULL
     SET_PREV_PTR(bp, NULL);
 
     // // set bytes 8-16 to the address of the next freed chunk
-    SET_NXT_PTR(bp, GET_START);
+    SET_NXT_PTR(bp, head);
+    printf("before pushed stack: %p\n", head);
 
     // // write the new address to the padding bytes
     SET_START(bp);
-    printf("pushed onto stack: %p, %p\n", GET_START, GET_NXT_PTR(GET_START));
+    printf("pushed onto stack: %p, %p, %li\n", GET_START, GET_NXT_PTR(GET_START), GET_SIZE(HDRP(GET_START)));
 }
 
 /*efl_remove
@@ -274,24 +281,27 @@ static void efl_push(void *bp)
  */
 static void efl_remove(void *bp)
 {
-    // if removing from head
-    // This only happens when the previous block is NULL
 
-    fflush(stdout);
-    printf("check this thing: %p, %p\n", GET_PREV_PTR(bp), GET_NXT_PTR(bp));
-    if (!GET_PREV_PTR(bp) && GET_NXT_PTR(bp))
+    // CASE 1: when bp is the ONLY node in the efl
+    if (!GET_PREV_PTR(bp) && !GET_NXT_PTR(bp))
     {
-        printf("hello world\n");
-        void *new_head = GET_NXT_PTR(bp);
-        printf("hits here: %p\n", new_head);
-        SET_PREV_PTR(new_head, NULL);
-        printf("hits here too\n");
+        printf("remove only head\n");
+        SET_START(NULL);
+    }
+    // CASE 2: when removing from the head, but the list size > 1
 
+    else if (!GET_PREV_PTR(bp))
+    {
+        printf("remove from head when size > 1\n");
+        void *new_head = GET_NXT_PTR(bp);
+        SET_PREV_PTR(new_head, NULL);
         SET_START(new_head);
     }
-    // if removing from the tail
-    else if (!GET_NXT_PTR(bp) && GET_PREV_PTR(bp))
+
+    else if (!GET_NXT_PTR(bp))
     {
+        printf("remove from tail when size > 1\n");
+
         void *new_tail = GET_PREV_PTR(bp);
         SET_NXT_PTR(new_tail, NULL);
     }
@@ -299,10 +309,10 @@ static void efl_remove(void *bp)
     // we HAVE bp, so just set the previous and next link
     else
     {
-        printf("hits here 301\n");
+        printf("remove in middle\n");
+
         void *prev = GET_PREV_PTR(bp);
         void *nxt = GET_NXT_PTR(bp);
-        printf("hits here 301\n");
 
         SET_NXT_PTR(prev, nxt);
         SET_PREV_PTR(nxt, prev);
@@ -318,23 +328,23 @@ static void efl_remove(void *bp)
  */
 static void place(void *bp, size_t asize)
 {
-    if (!bp)
-    {
-        printf("Invalid argument: bp is NULL. Exiting\n");
-        exit(1);
-    }
+    // if (!bp)
+    // {
+    //     printf("Invalid argument: bp is NULL. Exiting\n");
+    //     exit(1);
+    // }
 
-    if (GET_ALLOC(HDRP(bp)))
-    {
-        printf("Invalid pointed: bp already allocated. Exiting\n");
-        exit(1);
-    }
+    // if (GET_ALLOC(HDRP(bp)))
+    // {
+    //     printf("Invalid pointed: bp already allocated. Exiting\n");
+    //     exit(1);
+    // }
 
-    if (asize < 32)
-    {
-        printf("Invalid argument, asize is smaller than the minimum block size\n");
-        exit(1);
-    }
+    // if (asize < 32)
+    // {
+    //     printf("Invalid argument, asize is smaller than the minimum block size\n");
+    //     exit(1);
+    // }
 
     // need to check how big this available block is, then figure out if we could split it to fit the asize
     // the blocks NEED to be at least 32 bytes
@@ -345,6 +355,7 @@ static void place(void *bp, size_t asize)
     // bp is too small, don't split
     if (current_size - asize < 32)
     {
+        printf("does not split\n");
         PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
         PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
     }
@@ -372,7 +383,7 @@ static void place(void *bp, size_t asize)
         // allocate the new header and footer
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
-
+        efl_remove(bp);
         /*
         Go to the next block
         NOTE: this block is currently NOT a footer NOR header, we're going to need to make it a footer/header
@@ -393,6 +404,7 @@ static void place(void *bp, size_t asize)
         // now calculate the FTR block and pack that with the right info
         // both blocks are still freed
         PUT(FTRP(bp), PACK(remaining, 0));
+        coalesce(bp);
     }
 }
 
@@ -404,7 +416,6 @@ static void place(void *bp, size_t asize)
  */
 static void *coalesce(void *bp)
 {
-
     // we need to get the size of the block that just got freed first
     size_t size = GET_SIZE(HDRP(bp));
     /*
@@ -423,6 +434,7 @@ static void *coalesce(void *bp)
     // TRIVIAL 0 case
     if (prev_alloc && next_alloc)
     {
+        efl_push(bp);
         return bp;
     }
 
@@ -438,7 +450,8 @@ static void *coalesce(void *bp)
     */
     else if (!prev_alloc && next_alloc)
     {
-        // efl_remove(PREV_BLKP(bp));
+        printf("does it hits this?\n");
+        efl_remove(PREV_BLKP(bp));
         size = size + GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp), PACK(size, 0));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
@@ -452,7 +465,9 @@ static void *coalesce(void *bp)
     */
     else if (prev_alloc && !next_alloc)
     {
-        // efl_remove(NEXT_BLKP(bp));
+        printf("does it hits this instead?\n");
+
+        efl_remove(NEXT_BLKP(bp));
         size = size + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -461,14 +476,16 @@ static void *coalesce(void *bp)
     // CASE 3
     else
     {
-        // efl_remove(PREV_BLKP(bp));
-        // efl_remove(NEXT_BLKP(bp));
+        printf("does it hits this else?\n");
+
+        efl_remove(PREV_BLKP(bp));
+        efl_remove(NEXT_BLKP(bp));
         size = size + GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
     }
-    // efl_push(bp);
+    efl_push(bp);
     return bp;
 }
 
@@ -478,18 +495,17 @@ static void *coalesce(void *bp)
 static void *find_fit(size_t asize)
 {
 
-    // void *cur_block;
-    // cur_block = GET_START;
+    void *cur_block;
+    cur_block = GET_START;
 
-    // while (cur_block)
-    // {
-    //     printf("Does this not work?: %p\n", (void *)GET(cur_block));
-    //     if (GET(cur_block) && GET_SIZE(HDRP(GET(cur_block))) > asize)
-    //     {
-    //         return cur_block;
-    //     }
-    //     cur_block = GET_NXT_PTR(cur_block);
-    // }
+    while (cur_block)
+    {
+        if (GET_SIZE(HDRP(cur_block)) > asize)
+        {
+            return cur_block;
+        }
+        cur_block = GET_NXT_PTR(cur_block);
+    }
     // for (void *cur_block = GET_START; GET_SIZE(HDRP(GET(cur_block))) > 0; cur_block = GET_NXT_PTR(cur_block))
     // {
     //     if (!GET_ALLOC(HDRP(cur_block)) && (asize <= GET_SIZE(HDRP(cur_block))))
@@ -519,10 +535,10 @@ static void *extend_heap(size_t words)
     PUT(FTRP(bp), PACK(size, 0));         /* free block footer */
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* new epilogue header */
 
-    efl_push(bp);
-    return bp;
+    // efl_push(bp);
+    // return bp;
     /* Coalesce if the previous block was free */
-    // return coalesce(bp);
+    return coalesce(bp);
 }
 
 /*
