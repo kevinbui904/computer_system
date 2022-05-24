@@ -266,11 +266,11 @@ static void efl_push(void *bp)
 
     // // set bytes 8-16 to the address of the next freed chunk
     SET_NXT_PTR(bp, head);
-    printf("before pushed stack: %p\n", head);
+    // printf("before pushed stack: %p\n", head);
 
     // // write the new address to the padding bytes
     SET_START(bp);
-    printf("pushed onto stack: %p, %p, %li\n", GET_START, GET_NXT_PTR(GET_START), GET_SIZE(HDRP(GET_START)));
+    // printf("pushed onto stack: %p, %p, %li\n", GET_START, GET_NXT_PTR(GET_START), GET_SIZE(HDRP(GET_START)));
 }
 
 /*efl_remove
@@ -285,14 +285,14 @@ static void efl_remove(void *bp)
     // CASE 1: when bp is the ONLY node in the efl
     if (!GET_PREV_PTR(bp) && !GET_NXT_PTR(bp))
     {
-        printf("remove only head\n");
+        // printf("remove only head\n");
         SET_START(NULL);
     }
     // CASE 2: when removing from the head, but the list size > 1
 
     else if (!GET_PREV_PTR(bp))
     {
-        printf("remove from head when size > 1\n");
+        // printf("remove from head when size > 1\n");
         void *new_head = GET_NXT_PTR(bp);
         SET_PREV_PTR(new_head, NULL);
         SET_START(new_head);
@@ -300,7 +300,7 @@ static void efl_remove(void *bp)
 
     else if (!GET_NXT_PTR(bp))
     {
-        printf("remove from tail when size > 1\n");
+        // printf("remove from tail when size > 1\n");
 
         void *new_tail = GET_PREV_PTR(bp);
         SET_NXT_PTR(new_tail, NULL);
@@ -309,7 +309,7 @@ static void efl_remove(void *bp)
     // we HAVE bp, so just set the previous and next link
     else
     {
-        printf("remove in middle\n");
+        // printf("remove in middle\n");
 
         void *prev = GET_PREV_PTR(bp);
         void *nxt = GET_NXT_PTR(bp);
@@ -355,9 +355,10 @@ static void place(void *bp, size_t asize)
     // bp is too small, don't split
     if (current_size - asize < 32)
     {
-        printf("does not split\n");
+        // printf("does not split\n");
         PUT(HDRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
         PUT(FTRP(bp), PACK(GET_SIZE(HDRP(bp)), 1));
+        efl_remove(bp);
     }
 
     else
