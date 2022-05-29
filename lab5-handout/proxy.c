@@ -70,19 +70,54 @@ void handle_request(int connfd)
     // hint: the initial part of the doit function in tiny/tiny.c may be a good starting point
 
     struct stat sbuf;
-    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-    char filename[MAXLINE], cgiargs[MAXLINE];
+    char buf[MAXLINE], method[MAXLINE], url[MAXLINE], version[MAXLINE], proxy_buf[MAXLINE];
+    char filename[MAXLINE];
 
+    // rio stands for robust input/output
     rio_t rio;
 
+    // only to be used within this function
+    rio_t proxy_rio;
+
     /* Read request line and headers */
+    Rio_readinitb(&proxy_rio, connfd);
+    // if the buffer fails to inialize, just return
+    // this is just in case our server dies randomly
+    // if (!Rio_readlineb(&rio, buf, MAXLINE))
+    //     return;
+
+    printf("=========================== PROXY ==========================\n");
+    printf("REQUEST headers:\n");
+    Rio_readlineb(&proxy_rio, proxy_buf, MAXLINE);
+    while (strcmp(proxy_buf, "\r\n"))
+    {
+        printf("%s", proxy_buf);
+        Rio_readlineb(&proxy_rio, proxy_buf, MAXLINE);
+    }
+    printf("============================================================\n\n");
+
     Rio_readinitb(&rio, connfd);
+    printf("what the fuck\n");
+    Rio_readlineb(&rio, buf, MAXLINE);
+    printf("whats happening\n");
+    printf("check this: %s", buf);
+    sscanf(buf, "%s %s %s", method, url, version);
 
-    // if the file being read is empty, do nothing
-    if (!Rio_readlineb(&rio, buf, MAXLINE))
+    // check if request is valid here ---
+    printf("check this: %s, %s, %s\n", method, url, version);
+    // proxy currently only supports GET
+    if (strcmp("GET", method))
+    {
+        printf("Method: %s\n", method);
+        printf("ERROR: NEED TO IMPLEMENT, PROXY ONLY SUPPORTS GET\n");
         return;
+    }
 
-        // parse URL for hostname, port, and filename, then open a socket on that port and hostname
+    // end of request checking ---
+
+    // parse url
+
+    // parse URL for hostname, port, and filename, then open a socket on that port and hostname
 
     // send request to server as we read it from client (think echo)
     // a request consists of a GET line and zero or more headers
