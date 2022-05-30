@@ -64,68 +64,75 @@ void cache_insert(char *url, char *item, size_t size)
 /* Implement this function for Part I
  * For Part III, you may need to change the parameter and return type of handle_request
  */
+
+// send request to server as we read it from client (think echo)
+// a request consists of a GET line and zero or more headers
+// a blank line indicates the end of the request headers
+// remember: line endings/blank lines are "\r\n"
+
+// read the response from the server
+// remember: response headers, then a blank line, then the response body
 void handle_request(int connfd)
 {
     // read and parse request
     // hint: the initial part of the doit function in tiny/tiny.c may be a good starting point
 
-    struct stat sbuf;
     char buf[MAXLINE], method[MAXLINE], url[MAXLINE], version[MAXLINE], proxy_buf[MAXLINE];
-    char filename[MAXLINE];
+    char filename[MAXLINE], port[MAXLINE];
+
+    char url_trim[MAXLINE];
 
     // rio stands for robust input/output
     rio_t rio;
 
     // only to be used within this function
-    rio_t proxy_rio;
+    // rio_t proxy_rio;
 
     /* Read request line and headers */
-    Rio_readinitb(&proxy_rio, connfd);
-    // if the buffer fails to inialize, just return
-    // this is just in case our server dies randomly
-    // if (!Rio_readlineb(&rio, buf, MAXLINE))
-    //     return;
-
-    printf("=========================== PROXY ==========================\n");
-    printf("REQUEST headers:\n");
-    Rio_readlineb(&proxy_rio, proxy_buf, MAXLINE);
-    while (strcmp(proxy_buf, "\r\n"))
-    {
-        printf("%s", proxy_buf);
-        Rio_readlineb(&proxy_rio, proxy_buf, MAXLINE);
-    }
-    printf("============================================================\n\n");
-
     Rio_readinitb(&rio, connfd);
-    printf("what the fuck\n");
-    Rio_readlineb(&rio, buf, MAXLINE);
-    printf("whats happening\n");
-    printf("check this: %s", buf);
-    sscanf(buf, "%s %s %s", method, url, version);
 
-    // check if request is valid here ---
-    printf("check this: %s, %s, %s\n", method, url, version);
-    // proxy currently only supports GET
-    if (strcmp("GET", method))
-    {
-        printf("Method: %s\n", method);
-        printf("ERROR: NEED TO IMPLEMENT, PROXY ONLY SUPPORTS GET\n");
+    // if the line is empty, just return without doing anything
+    if (!Rio_readlineb(&rio, buf, MAXLINE))
         return;
-    }
 
-    // end of request checking ---
+    printf("%s", proxy_buf);
 
+    sscanf(buf, "%s %s %s", method, url, version);
     // parse url
-
     // parse URL for hostname, port, and filename, then open a socket on that port and hostname
 
-    // send request to server as we read it from client (think echo)
-    // a request consists of a GET line and zero or more headers
-    // a blank line indicates the end of the request headers
-    // remember: line endings/blank lines are "\r\n"
+    // trim url
+    sscanf(url, "http://%s", url_trim);
+    printf("url_trim: %s\n", url_trim);
 
-    // read the response from the server
-    // remember: response headers, then a blank line, then the response body
+    char *temp = strchr(url_trim, '/');
+    strncpy(filename, temp, MAXLINE);
+    *temp = '\0';
+    printf("filename: %s\n", filename);
+
+    // extract the port
+    temp = strchr(url_trim, ':') + 1;
+    // use strcpy here because we JUST added the null terminator beforehand
+    strcpy(port, temp);
+    *(temp - 1) = '\0';
+    printf("port: %s\n", port);
+    printf("host: %s\n", url_trim);
+
+    // establish connection with tiny
+    int server_fd = Open_clientfd(url_trim, port);
+
+    // read new fd
+    rio_t rio_server;
+    Rio_readinitb(&rio_server, server_fd);
+
+    Rio_readlineb(&rio, buf, MAXLINE);
+    printf("======================SERVER RESPONSE======================\n");
+    while (strcmp(buf, "\r\n"))
+    {
+        printf("%s", buf);
+        Rio_readlineb(&rio, buf, MAXLINE);
+    }
+    printf("===========================================================\n");
 }
 
 int main(int argc, char **argv)
