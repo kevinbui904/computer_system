@@ -41,6 +41,8 @@ void cache_print()
 /* initialize the global cache variable (allocate memory and initialize fields) */
 void cache_init()
 {
+    cache->head = NULL;
+    cache->total_size = 0;
 }
 
 /* deallocate the entire cache (all the entries and the cache global variable) */
@@ -135,14 +137,14 @@ void handle_request(int connfd)
     while (strcmp(server_buf, "\r\n"))
     {
         printf("%s", server_buf);
+        Rio_writen(connfd, server_buf, strlen(server_buf));
         Rio_readlineb(&rio_server, server_buf, MAXLINE);
-        Rio_writen(connfd, server_buf, MAXLINE);
         sscanf(server_buf, "Content-length:%s", content_length);
     }
-
-    printf("content_length hello: %s\n", content_length);
-    Rio_readlineb(&rio_server, server_buf, atoi(content_length));
-    printf("check this: %s \n", server_buf);
+    // write the \r\n to the response
+    Rio_writen(connfd, server_buf, 2);
+    Rio_readnb(&rio_server, server_buf, atoi(content_length));
+    Rio_writen(connfd, server_buf, atoi(content_length));
 }
 
 int main(int argc, char **argv)
