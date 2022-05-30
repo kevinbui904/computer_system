@@ -95,8 +95,6 @@ void handle_request(int connfd)
     if (!Rio_readlineb(&rio, buf, MAXLINE))
         return;
 
-    printf("%s", proxy_buf);
-
     sscanf(buf, "%s %s %s", method, url, version);
     // parse url
     // parse URL for hostname, port, and filename, then open a socket on that port and hostname
@@ -122,10 +120,13 @@ void handle_request(int connfd)
     int server_fd = Open_clientfd(url_trim, port);
 
     // read new fd
+    printf("check this\n");
     rio_t rio_server;
     Rio_readinitb(&rio_server, server_fd);
+    printf("check this2\n");
 
-    Rio_readlineb(&rio, buf, MAXLINE);
+    Rio_readlineb(&rio_server, buf, MAXLINE);
+    printf("check this 3\n");
     printf("======================SERVER RESPONSE======================\n");
     while (strcmp(buf, "\r\n"))
     {
