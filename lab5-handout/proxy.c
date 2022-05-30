@@ -143,8 +143,17 @@ void handle_request(int connfd)
     }
     // write the \r\n to the response
     Rio_writen(connfd, server_buf, 2);
-    Rio_readnb(&rio_server, server_buf, atoi(content_length));
-    Rio_writen(connfd, server_buf, atoi(content_length));
+
+    int bytes_to_read = atoi(content_length);
+    int bytes_left_to_read = Rio_readnb(&rio_server, server_buf, bytes_to_read);
+    Rio_writen(connfd, server_buf, bytes_to_read);
+    while (bytes_left_to_read != 0)
+    {
+        Rio_writen(connfd, server_buf, bytes_left_to_read);
+        bytes_left_to_read = Rio_readnb(&rio_server, server_buf, bytes_left_to_read);
+    }
+    // write the body to the response
+    // Rio_readnb(&rio_server, server_buf, atoi(content_length));
 }
 
 int main(int argc, char **argv)
