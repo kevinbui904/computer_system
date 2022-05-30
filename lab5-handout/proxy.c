@@ -77,10 +77,10 @@ void handle_request(int connfd)
     // read and parse request
     // hint: the initial part of the doit function in tiny/tiny.c may be a good starting point
 
-    char buf[MAXLINE], method[MAXLINE], url[MAXLINE], version[MAXLINE], proxy_buf[MAXLINE];
+    char buf[MAXLINE], method[MAXLINE], url[MAXLINE], version[MAXLINE], server_buf[MAXLINE];
     char filename[MAXLINE], port[MAXLINE];
 
-    char url_trim[MAXLINE];
+    char url_trim[MAXLINE], req_to_server[MAXLINE * 3];
 
     // rio stands for robust input/output
     rio_t rio;
@@ -117,23 +117,32 @@ void handle_request(int connfd)
     printf("host: %s\n", url_trim);
 
     // establish connection with tiny
-    int server_fd = Open_clientfd(url_trim, port);
-
-    // read new fd
-    printf("check this\n");
     rio_t rio_server;
+    int server_fd = Open_clientfd(url_trim, port);
     Rio_readinitb(&rio_server, server_fd);
-    printf("check this2\n");
 
-    Rio_readlineb(&rio_server, buf, MAXLINE);
-    printf("check this 3\n");
+    // make new request string
+    sprintf(req_to_server, "%s %s %s \r\n\r\n", method, filename, "HTTP/1.0");
+
+    printf("Req_to_server: %s\n", req_to_server);
+    Rio_writen(server_fd, req_to_server, MAXLINE);
+    // read new fd
+
     printf("======================SERVER RESPONSE======================\n");
-    while (strcmp(buf, "\r\n"))
+    Rio_readlineb(&rio_server, server_buf, MAXLINE);
+
+    char content_length[MAXLINE];
+    while (strcmp(server_buf, "\r\n"))
     {
-        printf("%s", buf);
-        Rio_readlineb(&rio, buf, MAXLINE);
+        printf("%s", server_buf);
+        Rio_readlineb(&rio_server, server_buf, MAXLINE);
+        Rio_writen(connfd, server_buf, MAXLINE);
+        sscanf(server_buf, "Content-length:%s", content_length);
     }
-    printf("===========================================================\n");
+
+    printf("content_length hello: %s\n", content_length);
+    Rio_readlineb(&rio_server, server_buf, atoi(content_length));
+    printf("check this: %s \n", server_buf);
 }
 
 int main(int argc, char **argv)
