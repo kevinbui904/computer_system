@@ -41,6 +41,7 @@ void cache_print()
 /* initialize the global cache variable (allocate memory and initialize fields) */
 void cache_init()
 {
+    cache = malloc(sizeof(cache_t));
     cache->head = NULL;
     cache->total_size = 0;
 }
@@ -48,6 +49,15 @@ void cache_init()
 /* deallocate the entire cache (all the entries and the cache global variable) */
 void cache_free()
 {
+    cache_entry_t *current = cache->head;
+    while (current != NULL)
+    {
+        free(current->url);
+        free(current->item);
+        free(current);
+        current = current->next;
+    }
+    free(cache);
 }
 
 /* search cache for an entry with a matching url
@@ -55,12 +65,25 @@ void cache_free()
  */
 cache_entry_t *cache_lookup(char *url)
 {
-    return NULL;
+    cache_entry_t *current = cache->head;
+    while (strcmp(current->url, url) && current != NULL)
+    {
+        current = current->next;
+    }
+    return current;
 }
 
 /* insert a new entry at the head of the cache */
 void cache_insert(char *url, char *item, size_t size)
 {
+    cache_entry_t *new_entry = malloc(sizeof(cache_entry_t));
+    new_entry->url = url;
+    new_entry->item = item;
+    new_entry->next = cache->head;
+    new_entry->size = size;
+
+    cache->head = new_entry;
+    cache->total_size = cache->total_size + size;
 }
 
 /* Implement this function for Part I
@@ -103,21 +126,16 @@ void handle_request(int connfd)
 
     // trim url
     sscanf(url, "http://%s", url_trim);
-    printf("url_trim: %s\n", url_trim);
 
     char *temp = strchr(url_trim, '/');
     strncpy(filename, temp, MAXLINE);
     *temp = '\0';
-    printf("filename: %s\n", filename);
 
     // extract the port
     temp = strchr(url_trim, ':') + 1;
     // use strcpy here because we JUST added the null terminator beforehand
     strcpy(port, temp);
     *(temp - 1) = '\0';
-    printf("port: %s\n", port);
-    printf("host: %s\n", url_trim);
-
     // establish connection with tiny
     rio_t rio_server;
     int server_fd = Open_clientfd(url_trim, port);
@@ -134,22 +152,42 @@ void handle_request(int connfd)
     Rio_readlineb(&rio_server, server_buf, MAXLINE);
 
     char content_length[MAXLINE];
+    long item_size = strlen(server_buf);
+    char *cache_item = malloc(item_size);
+    strcpy(cache_item, server_buf);
     while (strcmp(server_buf, "\r\n"))
     {
         printf("%s", server_buf);
+        item_size += strlen(server_buf);
+        cache_item = realloc(cache_item, item_size);
+        strcat(cache_item, server_buf);
+        sscanf(server_buf, "Content-length:%s", content_length);
         Rio_writen(connfd, server_buf, strlen(server_buf));
         Rio_readlineb(&rio_server, server_buf, MAXLINE);
-        sscanf(server_buf, "Content-length:%s", content_length);
     }
-    // write the \r\n to the response
-    Rio_writen(connfd, server_buf, 2);
 
+    // write the \r\n to the response and cache
+    Rio_writen(connfd, server_buf, 2);
+    cache_item = realloc(cache_item, item_size + 2);
+    strcat(cache_item, server_buf);
+
+    // extend cache to store body
     int bytes_to_read = atoi(content_length);
+    cache_item = realloc(cache_item, item_size + bytes_to_read);
+    char *start_of_body = cache_item + item_size + 1;
+    item_size += bytes_to_read;
+
+    printf("item_size: %ld, %d, %s\n", item_size, bytes_to_read, content_length);
+    memcpy(start_of_body, "Hel", 3);
+    printf("check here: %s\n", cache_item);
+
     int bytes_left_to_read = Rio_readnb(&rio_server, server_buf, bytes_to_read);
     Rio_writen(connfd, server_buf, bytes_to_read);
+
     while (bytes_left_to_read != 0)
     {
         Rio_writen(connfd, server_buf, bytes_left_to_read);
+        strcat(cache_item, server_buf);
         bytes_left_to_read = Rio_readnb(&rio_server, server_buf, bytes_left_to_read);
     }
     // write the body to the response
