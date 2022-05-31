@@ -165,6 +165,7 @@ void handle_request(int connfd)
         Rio_writen(connfd, server_buf, strlen(server_buf));
         Rio_readlineb(&rio_server, server_buf, MAXLINE);
     }
+    printf("===========================================================\n");
 
     // write the \r\n to the response and cache
     Rio_writen(connfd, server_buf, 2);
@@ -177,19 +178,18 @@ void handle_request(int connfd)
     char *start_of_body = cache_item + item_size + 1;
     item_size += bytes_to_read;
 
-    printf("item_size: %ld, %d, %s\n", item_size, bytes_to_read, content_length);
-    memcpy(start_of_body, "Hel", 3);
-    printf("check here: %s\n", cache_item);
-
     int bytes_left_to_read = Rio_readnb(&rio_server, server_buf, bytes_to_read);
-    Rio_writen(connfd, server_buf, bytes_to_read);
 
     while (bytes_left_to_read != 0)
     {
         Rio_writen(connfd, server_buf, bytes_left_to_read);
-        strcat(cache_item, server_buf);
+        memcpy(start_of_body, server_buf, bytes_left_to_read);
+        start_of_body += bytes_left_to_read;
         bytes_left_to_read = Rio_readnb(&rio_server, server_buf, bytes_left_to_read);
     }
+
+    cache_insert(url, cache_item, item_size);
+    cache_print();
     // write the body to the response
     // Rio_readnb(&rio_server, server_buf, atoi(content_length));
 }
@@ -219,6 +219,7 @@ int main(int argc, char **argv)
 
         // For Part III, replace this with code that creates and detaches a thread
         // or otherwise handles the request concurrently
+        cache_init();
         handle_request(connfd);
     }
 }
