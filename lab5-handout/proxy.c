@@ -66,7 +66,7 @@ void cache_free()
 cache_entry_t *cache_lookup(char *url)
 {
     cache_entry_t *current = cache->head;
-    while (strcmp(current->url, url) && current != NULL)
+    while (current != NULL && strcmp(current->url, url))
     {
         current = current->next;
     }
@@ -80,6 +80,7 @@ void cache_insert(char *url, char *item, size_t size)
     new_entry->url = url;
     new_entry->item = item;
     new_entry->next = cache->head;
+
     new_entry->size = size;
 
     cache->head = new_entry;
@@ -121,9 +122,15 @@ void handle_request(int connfd)
         return;
 
     sscanf(buf, "%s %s %s", method, url, version);
-    // parse url
-    // parse URL for hostname, port, and filename, then open a socket on that port and hostname
 
+    cache_entry_t *found = cache_lookup(url);
+    if (found)
+    {
+        Rio_writen(connfd, found->item, found->size);
+        return;
+    }
+
+    // parse URL for hostname, port, and filename, then open a socket on that port and hostname
     // trim url
     sscanf(url, "http://%s", url_trim);
 
@@ -148,7 +155,7 @@ void handle_request(int connfd)
     Rio_writen(server_fd, req_to_server, MAXLINE);
     // read new fd
 
-    printf("======================SERVER RESPONSE======================\n");
+    printf("======================SERVER HEADER RESPONSE======================\n");
     Rio_readlineb(&rio_server, server_buf, MAXLINE);
 
     char content_length[MAXLINE];
@@ -168,30 +175,30 @@ void handle_request(int connfd)
     printf("===========================================================\n");
 
     // write the \r\n to the response and cache
+    item_size += 2;
     Rio_writen(connfd, server_buf, 2);
-    cache_item = realloc(cache_item, item_size + 2);
+    cache_item = realloc(cache_item, item_size);
     strcat(cache_item, server_buf);
 
     // extend cache to store body
     int bytes_to_read = atoi(content_length);
     cache_item = realloc(cache_item, item_size + bytes_to_read);
-    char *start_of_body = cache_item + item_size + 1;
+
+    // put start_of_body at the previous item_size + 2 bytes for \r\n (before adding body)
+    char *start_of_body = cache_item + item_size;
     item_size += bytes_to_read;
 
     int bytes_left_to_read = Rio_readnb(&rio_server, server_buf, bytes_to_read);
-
     while (bytes_left_to_read != 0)
     {
         Rio_writen(connfd, server_buf, bytes_left_to_read);
         memcpy(start_of_body, server_buf, bytes_left_to_read);
-        start_of_body += bytes_left_to_read;
         bytes_left_to_read = Rio_readnb(&rio_server, server_buf, bytes_left_to_read);
+        start_of_body += (bytes_to_read - bytes_left_to_read);
     }
-
-    cache_insert(url, cache_item, item_size);
-    cache_print();
-    // write the body to the response
-    // Rio_readnb(&rio_server, server_buf, atoi(content_length));
+    char *cached_url = malloc(strlen(url));
+    strcpy(cached_url, url);
+    cache_insert(cached_url, cache_item, item_size);
 }
 
 int main(int argc, char **argv)
@@ -209,6 +216,7 @@ int main(int argc, char **argv)
     }
 
     listenfd = Open_listenfd(argv[1]);
+    cache_init();
     while (1)
     {
         clientlen = sizeof(clientaddr);
@@ -219,7 +227,6 @@ int main(int argc, char **argv)
 
         // For Part III, replace this with code that creates and detaches a thread
         // or otherwise handles the request concurrently
-        cache_init();
         handle_request(connfd);
     }
 }
