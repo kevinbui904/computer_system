@@ -40,6 +40,10 @@ CACHE_LIST="tiny.c
 # The file we will fetch for various tests
 FETCH_FILE="home.html"
 
+#color values for printing
+RED='\033[0;31m'
+NC='\033[0m' #no color
+
 #####
 # Helper functions
 #
@@ -218,10 +222,17 @@ fi
 trap 'echo "Timeout waiting for the server to grab the port reserved for it"; kill $$' ALRM
 
 #####
-# Basic
-#
-echo "*** Basic ***"
+# Port usage
+# Test that Proxy will automatically request a default port
+# if port is missing from request.
 
+#If successful, the script will display success
+#If not, the script will display a red FAILURE message
+
+echo "*** Port usage ***"
+
+#clearing everything before we start
+clear_dirs
 # Run the Tiny Web server
 tiny_port=$(free_port)
 echo "Starting tiny on ${tiny_port}"
@@ -243,56 +254,45 @@ proxy_pid=$!
 wait_for_port_use "${proxy_port}"
 
 
-# Now do the test by fetching some text and binary files directly from
-# Tiny and via the proxy, and then comparing the results.
-numRun=0
-numSucceeded=0
-for file in ${BASIC_LIST}
-do
-    numRun=`expr $numRun + 1`
-    echo "${numRun}: ${file}"
-    clear_dirs
+# Now do the test by sending in a request without a port
+succeeded=0
+# download_proxy $PROXY_DIR ${file} "http://localhost:${tiny_port}/${file}" "http://localhost:${proxy_port}"
+# download_noproxy $NOPROXY_DIR ${FETCH_FILE} "http://localhost:${tiny_port}/${FETCH_FILE}"
 
-    # Fetch using the proxy
-    echo "   Fetching ./tiny/${file} into ${PROXY_DIR} using the proxy"
-    download_proxy $PROXY_DIR ${file} "http://localhost:${tiny_port}/${file}" "http://localhost:${proxy_port}"
+echo "Fetching ./tiny/${FETCH_FILE} into ${PROXY_DIR} using the proxy"
+download_proxy $PROXY_DIR ${FETCH_FILE} "http://localhost/${FETCH_FILE}" "http://localhost:${proxy_port}"
+download_noproxy $NOPROXY_DIR ${FETCH_FILE} "http://localhost:${tiny_port}/home.html"
 
-    # Fetch directly from Tiny
-    echo "   Fetching ./tiny/${file} into ${NOPROXY_DIR} directly from Tiny"
-    download_noproxy $NOPROXY_DIR ${file} "http://localhost:${tiny_port}/${file}"
+diff -q ${PROXY_DIR}/${FETCH_FILE} ${NOPROXY_DIR}/${FETCH_FILE} &> /dev/null
+if [ $? -eq 0 ]; then
+    concurrencyScore=${MAX_CONCURRENCY}
+    echo "  SUCCESS: Was able to fetch tiny/${FETCH_FILE} from the proxy."
+else
+    concurrencyScore=0
+    echo -e "  ${RED}FAILURE${NC}: Was not able to fetch tiny/${FETCH_FILE} from the proxy."
+fi
 
-    # Compare the two files
-    echo "   Comparing the two files"
-    diff -q ${PROXY_DIR}/${file} ${NOPROXY_DIR}/${file} &> /dev/null
-    if [ $? -eq 0 ]; then
-        numSucceeded=`expr ${numSucceeded} + 1`
-        echo "   Success: Files are identical."
-    else
-        echo "   Failure: Files differ."
-    fi
-done
-
+#cleanup
+clear_dirs
 echo "Killing tiny and proxy"
 kill $tiny_pid 2> /dev/null
 wait $tiny_pid 2> /dev/null
 kill $proxy_pid 2> /dev/null
 wait $proxy_pid 2> /dev/null
 
-basicScore=`expr ${MAX_BASIC} \* ${numSucceeded} / ${numRun}`
+###
+# error 404 should be handled correctly
+# Server should send back a non-empty body, 
+# for this test we will only check it against error.html
+echo "*** 404 errors ***"
 
-echo "basicScore: $basicScore/${MAX_BASIC}"
-
-#####
-# Caching
-#
-echo ""
-echo "*** Cache ***"
-
+#clearing everything before we start
+clear_dirs
 # Run the Tiny Web server
 tiny_port=$(free_port)
-echo "Starting tiny on port ${tiny_port}"
+echo "Starting tiny on ${tiny_port}"
 cd ./tiny
-./tiny ${tiny_port} &> /dev/null &
+./tiny ${tiny_port}   &> /dev/null  &
 tiny_pid=$!
 cd ${HOME_DIR}
 
@@ -301,125 +301,32 @@ wait_for_port_use "${tiny_port}"
 
 # Run the proxy
 proxy_port=$(free_port)
-echo "Starting proxy on port ${proxy_port}"
-./proxy ${proxy_port} &> /dev/null &
+echo "Starting proxy on ${proxy_port}"
+./proxy ${proxy_port}  &> /dev/null &
 proxy_pid=$!
 
 # Wait for the proxy to start in earnest
 wait_for_port_use "${proxy_port}"
 
-# Fetch some files from tiny using the proxy
-clear_dirs
-for file in ${CACHE_LIST}
-do
-    echo "Fetching ./tiny/${file} into ${PROXY_DIR} using the proxy"
-    download_proxy $PROXY_DIR ${file} "http://localhost:${tiny_port}/${file}" "http://localhost:${proxy_port}"
-done
 
-# Kill Tiny
-echo "Killing tiny"
-kill $tiny_pid 2> /dev/null
-wait $tiny_pid 2> /dev/null
-
-# Now try to fetch a cached copy of one of the fetched files.
-echo "Fetching a cached copy of ./tiny/${FETCH_FILE} into ${NOPROXY_DIR}"
-download_proxy $NOPROXY_DIR ${FETCH_FILE} "http://localhost:${tiny_port}/${FETCH_FILE}" "http://localhost:${proxy_port}"
-
-# See if the proxy fetch succeeded by comparing it with the original
-# file in the tiny directory
-diff -q ./tiny/${FETCH_FILE} ${NOPROXY_DIR}/${FETCH_FILE}  &> /dev/null
-if [ $? -eq 0 ]; then
-    cacheScore=${MAX_CACHE}
-    echo "Success: Was able to fetch tiny/${FETCH_FILE} from the cache."
-else
-    cacheScore=0
-    echo "Failure: Was not able to fetch tiny/${FETCH_FILE} from the proxy cache."
-fi
-
-# Kill the proxy
-echo "Killing proxy"
-kill $proxy_pid 2> /dev/null
-wait $proxy_pid 2> /dev/null
-
-echo "cacheScore: $cacheScore/${MAX_CACHE}"
-
-
-######
-# Concurrency
-#
-
-echo ""
-echo "*** Concurrency ***"
-
-# Run the Tiny Web server
-tiny_port=$(free_port)
-echo "Starting tiny on port ${tiny_port}"
-cd ./tiny
-./tiny ${tiny_port} &> /dev/null &
-tiny_pid=$!
-cd ${HOME_DIR}
-
-# Wait for tiny to start in earnest
-wait_for_port_use "${tiny_port}"
-
-# Run the proxy
-proxy_port=$(free_port)
-echo "Starting proxy on port ${proxy_port}"
-./proxy ${proxy_port} &> /dev/null &
-proxy_pid=$!
-
-# Wait for the proxy to start in earnest
-wait_for_port_use "${proxy_port}"
-
-# Run a special blocking nop-server that never responds to requests
-nop_port=$(free_port)
-echo "Starting the blocking NOP server on port ${nop_port}"
-./nop-server.py ${nop_port} &> /dev/null &
-nop_pid=$!
-
-# Wait for the nop server to start in earnest
-wait_for_port_use "${nop_port}"
-
-# Try to fetch a file from the blocking nop-server using the proxy
-clear_dirs
-echo "Trying to fetch a file from the blocking nop-server"
-download_proxy $PROXY_DIR "nop-file.txt" "http://localhost:${nop_port}/nop-file.txt" "http://localhost:${proxy_port}" &
-
-# Fetch directly from Tiny
-echo "Fetching ./tiny/${FETCH_FILE} into ${NOPROXY_DIR} directly from Tiny"
-download_noproxy $NOPROXY_DIR ${FETCH_FILE} "http://localhost:${tiny_port}/${FETCH_FILE}"
-
-# Fetch using the proxy
-echo "Fetching ./tiny/${FETCH_FILE} into ${PROXY_DIR} using the proxy"
-download_proxy $PROXY_DIR ${FETCH_FILE} "http://localhost:${tiny_port}/${FETCH_FILE}" "http://localhost:${proxy_port}"
-
-# See if the proxy fetch succeeded
-echo "Checking whether the proxy fetch succeeded"
-diff -q ${PROXY_DIR}/${FETCH_FILE} ${NOPROXY_DIR}/${FETCH_FILE} &> /dev/null
-if [ $? -eq 0 ]; then
-    concurrencyScore=${MAX_CONCURRENCY}
-    echo "Success: Was able to fetch tiny/${FETCH_FILE} from the proxy."
+# Now do the test by sending in a request without a port
+succeeded=0
+download_proxy $PROXY_DIR "unknown.html" "http://localhost:${tiny_port}/unknown.html" "http://localhost:${proxy_port}"
+if test -f "${PROXY_DIR}/error.html" ; then
+    echo "  SUCCESS: there is an error.html file."
 else
     concurrencyScore=0
-    echo "Failure: Was not able to fetch tiny/${FETCH_FILE} from the proxy."
+    echo -e "  ${RED}FAILURE${NC}: error 404 has not been handled."
 fi
 
-# Clean up
-echo "Killing tiny, proxy, and nop-server"
+#cleanup
+clear_dirs
+echo "Killing tiny and proxy"
 kill $tiny_pid 2> /dev/null
 wait $tiny_pid 2> /dev/null
 kill $proxy_pid 2> /dev/null
 wait $proxy_pid 2> /dev/null
-kill $nop_pid 2> /dev/null
-wait $nop_pid 2> /dev/null
-
-echo "concurrencyScore: $concurrencyScore/${MAX_CONCURRENCY}"
 
 
-# Emit the total score
-totalScore=`expr ${basicScore} + ${cacheScore} + ${concurrencyScore}`
-maxScore=`expr ${MAX_BASIC} + ${MAX_CACHE} + ${MAX_CONCURRENCY}`
-echo ""
-echo "totalScore: ${totalScore}/${maxScore}"
 exit
 

@@ -101,7 +101,6 @@ void cache_insert(char *url, char *item, size_t size)
 void *handle_request(void *connfdp)
 {
     int connfd = *(int *)connfdp;
-    printf("check here: %i\n", connfd);
     // read and parse request
     // hint: the initial part of the doit function in tiny/tiny.c may be a good starting point
 
