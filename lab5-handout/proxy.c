@@ -98,8 +98,10 @@ void cache_insert(char *url, char *item, size_t size)
 
 // read the response from the server
 // remember: response headers, then a blank line, then the response body
-void handle_request(int connfd)
+void *handle_request(void *connfdp)
 {
+    int connfd = *(int *)connfdp;
+    printf("check here: %i\n", connfd);
     // read and parse request
     // hint: the initial part of the doit function in tiny/tiny.c may be a good starting point
 
@@ -119,7 +121,7 @@ void handle_request(int connfd)
 
     // if the line is empty, just return without doing anything
     if (!Rio_readlineb(&rio, buf, MAXLINE))
-        return;
+        return NULL;
 
     sscanf(buf, "%s %s %s", method, url, version);
 
@@ -127,7 +129,7 @@ void handle_request(int connfd)
     if (found)
     {
         Rio_writen(connfd, found->item, found->size);
-        return;
+        return NULL;
     }
 
     // parse URL for hostname, port, and filename, then open a socket on that port and hostname
@@ -199,6 +201,8 @@ void handle_request(int connfd)
     char *cached_url = malloc(strlen(url));
     strcpy(cached_url, url);
     cache_insert(cached_url, cache_item, item_size);
+    free(connfdp);
+    return NULL;
 }
 
 int main(int argc, char **argv)
@@ -206,6 +210,8 @@ int main(int argc, char **argv)
     int listenfd, connfd;
     char hostname[MAXLINE], port[MAXLINE];
     socklen_t clientlen;
+
+    pthread_t tid;
     struct sockaddr_storage clientaddr;
 
     /* Check command line args */
@@ -221,12 +227,14 @@ int main(int argc, char **argv)
     {
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+        int *connfdp = malloc(sizeof(int));
+        *connfdp = connfd;
         Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE,
                     port, MAXLINE, 0);
         printf("Accepted connection from (%s, %s)\n", hostname, port);
 
         // For Part III, replace this with code that creates and detaches a thread
         // or otherwise handles the request concurrently
-        handle_request(connfd);
+        Pthread_create(&tid, NULL, handle_request, connfdp);
     }
 }
