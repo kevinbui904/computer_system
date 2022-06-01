@@ -2,8 +2,16 @@
  * @file proxy.c
  * @author Thien K. M. Bui <buik@carleton.edu>
  *
- * REPLACE THIS vvv
- * Describe your proxy server here, noting any known bugs or other points of interest
+ * This is a proxy to be used as a middle man between client and tiny.c
+ * as part of Lab5 of CS208, Carleton College 2022
+ *
+ * Known bugs:
+ *      When proxy receive an improper request (e.g. the url is "local host : 5000"),
+ *          proxy will segfault
+ *      When proxy receives a request without a port, proxy will segfault
+ *
+ *      Responses without body from server will also cause client to wait indefinitely
+ *          as proxy does not generate its own response object
  */
 
 #include "csapp.h"
@@ -87,14 +95,6 @@ void cache_insert(char *url, char *item, size_t size)
     cache->total_size = cache->total_size + size;
 }
 
-// send request to server as we read it from client (think echo)
-// a request consists of a GET line and zero or more headers
-// a blank line indicates the end of the request headers
-// remember: line endings/blank lines are "\r\n"
-
-// read the response from the server
-// remember: response headers, then a blank line, then the response body
-
 /*
     handle_request()
     This function will analyze the request and then forward it to
@@ -175,7 +175,6 @@ void *handle_request(void *connfdp)
         Rio_writen(connfd, server_buf, strlen(server_buf));
         Rio_readlineb(&rio_server, server_buf, MAXLINE);
     }
-    printf("===========================================================\n");
 
     // write the \r\n to the response and cache
     item_size += 2;

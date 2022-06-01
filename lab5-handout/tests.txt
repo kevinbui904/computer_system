@@ -1,0 +1,50 @@
+These are the tests that I, with help from professor Aaron Bauer, has devised
+and - for some - implemented to test proxy.c
+
+TEST 1-3 HAVE BEEN IMPLEMENTED IN my-driver.sh, simply run the shell script
+====================================================================================
+1. Test that will check whether proxy will automatically route to tiny port
+    even if the port in url is missing (DEFAULT PORT Test)
+
+Implementation detail:
+    send a request of the form "http://{domain}/home.html" to proxy
+    to pass:
+        Proxy need to return home.html 
+
+2. Test that will check whether proxy will return a body in an error 404 
+    event 
+
+Implementation detail:
+    send a request of the form "http://{domain}:{port}/unknown.html" to proxy 
+    to pass:
+        Proxy return error.html in its body 
+
+3. Test that will check whether proxy will return a body in a POST 
+    request
+
+Implementation detail:
+    send a POST request of the form "http://{domain}:{port}/home.html" to proxy
+    to pass:
+        Proxy will return response.html to signify that it processed the POST 
+        request
+====================================================================================
+
+4. Test that will check whether proxy will cache files over 32kb in size 
+
+Implementation detail:
+    Send a request of the form "http://{domain}:{port}/big.json" to proxy 
+    Kill tiny server  
+    Send another request of the same form to proxy (e.g. "http://{domain}:{port}/big.json")
+    to pass:
+        Client SHOULD NOT receive big.json
+
+5. Test that will check whether proxy is storing more than 64kb in its cache 
+
+Implementation detail:
+    Send multiple requests of the form "http://{domain}:{port}/{distinct_files}" to proxy 
+    Make sure that all the files in cache exceed 64kb 
+    Send one more request of the form "http://{domain}:{port}/over.json" to proxy 
+    Shut down tiny 
+    Request over.json from proxy (e.g. send "http://{domain}:{port}/over.json" to proxy)
+    to pass:
+        Client SHOULD NOT receive over.json 

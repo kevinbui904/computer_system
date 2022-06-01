@@ -229,7 +229,7 @@ trap 'echo "Timeout waiting for the server to grab the port reserved for it"; ki
 #If successful, the script will display success
 #If not, the script will display a red FAILURE message
 
-echo "*** Port usage ***"
+echo "*** DEFAULT PORT ***"
 
 #clearing everything before we start
 clear_dirs
@@ -256,8 +256,6 @@ wait_for_port_use "${proxy_port}"
 
 # Now do the test by sending in a request without a port
 succeeded=0
-# download_proxy $PROXY_DIR ${file} "http://localhost:${tiny_port}/${file}" "http://localhost:${proxy_port}"
-# download_noproxy $NOPROXY_DIR ${FETCH_FILE} "http://localhost:${tiny_port}/${FETCH_FILE}"
 
 echo "Fetching ./tiny/${FETCH_FILE} into ${PROXY_DIR} using the proxy"
 download_proxy $PROXY_DIR ${FETCH_FILE} "http://localhost/${FETCH_FILE}" "http://localhost:${proxy_port}"
@@ -282,9 +280,9 @@ wait $proxy_pid 2> /dev/null
 
 ###
 # error 404 should be handled correctly
-# Server should send back a non-empty body, 
+# Proxy should send back a non-empty body in a 404 error, 
 # for this test we will only check it against error.html
-echo "*** 404 errors ***"
+echo "*** 404 ERROR ***"
 
 #clearing everything before we start
 clear_dirs
@@ -327,6 +325,62 @@ wait $tiny_pid 2> /dev/null
 kill $proxy_pid 2> /dev/null
 wait $proxy_pid 2> /dev/null
 
+###
+# POST requests should be handled correctly
+# Proxy should send back a non-empty body regardless of whether
+# the POST request fails or is successful.
+# For this test we will only check if the response is called response.html
+
+echo "*** POST REQUEST ***"
+#clearing everything before we start
+clear_dirs
+# Run the Tiny Web server
+tiny_port=$(free_port)
+echo "Starting tiny on ${tiny_port}"
+cd ./tiny
+./tiny ${tiny_port}   &> /dev/null  &
+tiny_pid=$!
+cd ${HOME_DIR}
+
+# Wait for tiny to start in earnest
+wait_for_port_use "${tiny_port}"
+
+# Run the proxy
+proxy_port=$(free_port)
+echo "Starting proxy on ${proxy_port}"
+./proxy ${proxy_port}  &> /dev/null &
+proxy_pid=$!
+
+# Wait for the proxy to start in earnest
+wait_for_port_use "${proxy_port}"
+
+
+# Now do the test by sending in a request without a port
+succeeded=0
+
+    # cd $1
+    # curl --max-time ${TIMEOUT} --silent --proxy $4 --output $2 $3
+    # (( $? == 28 )) && echo "Error: Fetch timed out after ${TIMEOUT} seconds"
+    # cd $HOME_DIR
+cd $PROXY_DIR
+curl -X POST --max-time $TIMEOUT --silent --proxy "http://localhost:${proxy_port}" "http://localhost:${tiny_port}/"
+(( $? == 28)) && echo "Error: Fetch timed out after ${TIMEOUT} seconds"
+cd $HOME_DIR
+
+if test -f "${PROXY_DIR}/response.html" ; then
+    echo "  SUCCESS: there is an response.html file."
+else
+    concurrencyScore=0
+    echo -e "  ${RED}FAILURE${NC}: POST response has not been handled."
+fi
+
+#cleanup
+clear_dirs
+echo "Killing tiny and proxy"
+kill $tiny_pid 2> /dev/null
+wait $tiny_pid 2> /dev/null
+kill $proxy_pid 2> /dev/null
+wait $proxy_pid 2> /dev/null
 
 exit
 
