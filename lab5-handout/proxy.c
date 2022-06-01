@@ -87,10 +87,6 @@ void cache_insert(char *url, char *item, size_t size)
     cache->total_size = cache->total_size + size;
 }
 
-/* Implement this function for Part I
- * For Part III, you may need to change the parameter and return type of handle_request
- */
-
 // send request to server as we read it from client (think echo)
 // a request consists of a GET line and zero or more headers
 // a blank line indicates the end of the request headers
@@ -98,11 +94,20 @@ void cache_insert(char *url, char *item, size_t size)
 
 // read the response from the server
 // remember: response headers, then a blank line, then the response body
+
+/*
+    handle_request()
+    This function will analyze the request and then forward it to
+    tiny.c. Afterward it will create a cache in memory of the response.
+    If url requested has already been cache, handle_request will
+    simply return the item stored in memory without connecting to the server.
+*/
 void *handle_request(void *connfdp)
 {
+    // configured this way instead of taking in an int pointer because of
+    // pthread_create specification.
+
     int connfd = *(int *)connfdp;
-    // read and parse request
-    // hint: the initial part of the doit function in tiny/tiny.c may be a good starting point
 
     char buf[MAXLINE], method[MAXLINE], url[MAXLINE], version[MAXLINE], server_buf[MAXLINE];
     char filename[MAXLINE], port[MAXLINE];
@@ -112,18 +117,16 @@ void *handle_request(void *connfdp)
     // rio stands for robust input/output
     rio_t rio;
 
-    // only to be used within this function
-    // rio_t proxy_rio;
-
-    /* Read request line and headers */
+    /* Bind buffer to connection */
     Rio_readinitb(&rio, connfd);
 
-    // if the line is empty, just return without doing anything
+    // if the request is empty, just return without doing anything
     if (!Rio_readlineb(&rio, buf, MAXLINE))
         return NULL;
 
     sscanf(buf, "%s %s %s", method, url, version);
 
+    // search cache for previously requested things
     cache_entry_t *found = cache_lookup(url);
     if (found)
     {
@@ -144,6 +147,7 @@ void *handle_request(void *connfdp)
     // use strcpy here because we JUST added the null terminator beforehand
     strcpy(port, temp);
     *(temp - 1) = '\0';
+
     // establish connection with tiny
     rio_t rio_server;
     int server_fd = Open_clientfd(url_trim, port);
@@ -151,21 +155,19 @@ void *handle_request(void *connfdp)
 
     // make new request string
     sprintf(req_to_server, "%s %s %s \r\n\r\n", method, filename, "HTTP/1.0");
-
-    printf("Req_to_server: %s\n", req_to_server);
     Rio_writen(server_fd, req_to_server, MAXLINE);
-    // read new fd
-
-    printf("======================SERVER HEADER RESPONSE======================\n");
     Rio_readlineb(&rio_server, server_buf, MAXLINE);
 
     char content_length[MAXLINE];
     long item_size = strlen(server_buf);
+
+    // cache_item will be realloc everytime it grows, it'll be slower but
+    // utilizes memory better
     char *cache_item = malloc(item_size);
     strcpy(cache_item, server_buf);
+
     while (strcmp(server_buf, "\r\n"))
     {
-        printf("%s", server_buf);
         item_size += strlen(server_buf);
         cache_item = realloc(cache_item, item_size);
         strcat(cache_item, server_buf);
@@ -232,8 +234,6 @@ int main(int argc, char **argv)
                     port, MAXLINE, 0);
         printf("Accepted connection from (%s, %s)\n", hostname, port);
 
-        // For Part III, replace this with code that creates and detaches a thread
-        // or otherwise handles the request concurrently
         Pthread_create(&tid, NULL, handle_request, connfdp);
     }
 }
